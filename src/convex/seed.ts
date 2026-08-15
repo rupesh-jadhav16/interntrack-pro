@@ -949,15 +949,7 @@ export const seedUserData = mutation({
         link: "/app/tracker",
         createdAt: now,
       });
-      await ctx.db.insert("deadlines", {
-        userId,
-        title: "Today's daily report",
-        type: "daily_report",
-        dueDate: startOfDay(now) + 23 * 3600000,
-        status: "upcoming",
-        link: "/app/reports",
-        createdAt: now,
-      });
+      // Today's daily report deadline is derived live by the deadlines query
 
       // notifications
       await notify(
@@ -1043,18 +1035,18 @@ export const seedUserData = mutation({
         (s) => s.department === faculty.department,
       );
       const pool = deptStudents.length >= 2 ? deptStudents : students.slice(0, 3);
+      const mine = await ctx.db
+        .query("facultyAssignments")
+        .withIndex("by_faculty", (q) => q.eq("facultyId", faculty._id))
+        .collect();
+      const mineIds = new Set(mine.map((m) => m.studentId));
       for (const s of pool.slice(0, 3)) {
-        const exists = await ctx.db
-          .query("facultyAssignments")
-          .withIndex("by_student", (q) => q.eq("studentId", s._id))
-          .first();
-        if (!exists) {
-          await ctx.db.insert("facultyAssignments", {
-            facultyId: faculty._id,
-            studentId: s._id,
-            createdAt: now,
-          });
-        }
+        if (mineIds.has(s._id)) continue;
+        await ctx.db.insert("facultyAssignments", {
+          facultyId: faculty._id,
+          studentId: s._id,
+          createdAt: now,
+        });
       }
       await notify(
         ctx,

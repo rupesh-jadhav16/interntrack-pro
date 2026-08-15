@@ -12,8 +12,52 @@ import "./index.css";
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
-const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const Onboarding = lazy(() => import("./pages/Onboarding.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+
+// App workspace (loaded eagerly — the authenticated experience)
+import AppShell, { RoleGate } from "./app/AppShell";
+import RoleHome from "./app/role-home";
+import NotificationsPage from "./app/notifications-page";
+
+// Student
+import StudentInternships from "./app/student/internships";
+import StudentApplications from "./app/student/applications";
+import StudentTracker from "./app/student/tracker";
+import StudentReports from "./app/student/reports";
+import StudentAttendance from "./app/student/attendance";
+import StudentDeadlines from "./app/student/deadlines";
+import StudentLeaderboard from "./app/student/leaderboard";
+import StudentRewards from "./app/student/rewards";
+import StudentCertificates from "./app/student/certificates";
+import StudentProfile from "./app/student/profile";
+
+// Faculty
+import FacultyStudents from "./app/faculty/students";
+import FacultyReports from "./app/faculty/reports";
+import FacultyPerformance from "./app/faculty/performance";
+
+// Admin
+import AdminStudents from "./app/admin/students";
+import AdminFaculty from "./app/admin/faculty";
+import AdminCompanies from "./app/admin/companies";
+import AdminVerification from "./app/admin/verification";
+import AdminInternships from "./app/admin/internships";
+import AdminApplications from "./app/admin/applications";
+import AdminCertificates from "./app/admin/certificates";
+import AdminRankings from "./app/admin/rankings";
+import AdminRewards from "./app/admin/rewards";
+import AdminAnalytics from "./app/admin/analytics";
+import AdminAnnouncements from "./app/admin/announcements";
+
+// Company
+import CompanyProfile from "./app/company/profile";
+import CompanyInternships from "./app/company/internships";
+import CompanyApplications from "./app/company/applications";
+import CompanyCandidates from "./app/company/candidates";
+import CompanyInterns from "./app/company/interns";
+
+import { useAuth } from "@/hooks/use-auth";
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -82,8 +126,6 @@ class RootErrorBoundary extends React.Component<
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
-
-
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
@@ -107,6 +149,38 @@ function RouteSyncer() {
   return null;
 }
 
+/** Renders a role-specific page for a shared path. If the role has no page
+ *  for this path, shows the access-denied state. */
+function RoleSwitch({
+  student,
+  faculty,
+  admin,
+  company,
+}: {
+  student?: React.ComponentType;
+  faculty?: React.ComponentType;
+  admin?: React.ComponentType;
+  company?: React.ComponentType;
+}) {
+  const { user } = useAuth();
+  const map: Record<string, React.ComponentType | undefined> = {
+    student,
+    faculty,
+    admin,
+    company,
+  };
+  const Comp = user?.role ? map[user.role] : undefined;
+  if (!Comp) {
+    return (
+      <RoleGate roles={["student", "faculty", "admin", "company"]}>
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center text-sm text-slate-400">
+          This page isn't part of your role's workspace.
+        </div>
+      </RoleGate>
+    );
+  }
+  return <Comp />;
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -122,16 +196,199 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/" element={<Landing />} />
               <Route
                 path="/auth"
-                element={<AuthPage redirectAfterAuth="/dashboard" />}
+                element={<AuthPage redirectAfterAuth="/app" />}
               />
               <Route
-                path="/dashboard"
+                path="/onboarding"
                 element={
                   <RequireAuth>
-                    <Dashboard />
+                    <Onboarding />
                   </RequireAuth>
                 }
               />
+              <Route
+                path="/app"
+                element={
+                  <RequireAuth>
+                    <AppShell />
+                  </RequireAuth>
+                }
+              >
+                <Route index element={<RoleHome />} />
+                {/* Shared paths, role-aware */}
+                <Route
+                  path="internships"
+                  element={
+                    <RoleSwitch
+                      student={StudentInternships}
+                      admin={AdminInternships}
+                      company={CompanyInternships}
+                    />
+                  }
+                />
+                <Route
+                  path="applications"
+                  element={
+                    <RoleSwitch
+                      student={StudentApplications}
+                      admin={AdminApplications}
+                      company={CompanyApplications}
+                    />
+                  }
+                />
+                <Route
+                  path="reports"
+                  element={
+                    <RoleSwitch
+                      student={StudentReports}
+                      faculty={FacultyReports}
+                    />
+                  }
+                />
+                <Route
+                  path="rewards"
+                  element={
+                    <RoleSwitch student={StudentRewards} admin={AdminRewards} />
+                  }
+                />
+                <Route
+                  path="certificates"
+                  element={
+                    <RoleSwitch
+                      student={StudentCertificates}
+                      admin={AdminCertificates}
+                    />
+                  }
+                />
+                <Route
+                  path="profile"
+                  element={
+                    <RoleSwitch
+                      student={StudentProfile}
+                      company={CompanyProfile}
+                    />
+                  }
+                />
+                <Route
+                  path="students"
+                  element={
+                    <RoleSwitch
+                      faculty={FacultyStudents}
+                      admin={AdminStudents}
+                    />
+                  }
+                />
+                {/* Student-only */}
+                <Route
+                  path="tracker"
+                  element={
+                    <RoleGate roles={["student"]}>
+                      <StudentTracker />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="attendance"
+                  element={
+                    <RoleGate roles={["student"]}>
+                      <StudentAttendance />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="deadlines"
+                  element={
+                    <RoleGate roles={["student"]}>
+                      <StudentDeadlines />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="leaderboard"
+                  element={
+                    <RoleGate roles={["student"]}>
+                      <StudentLeaderboard />
+                    </RoleGate>
+                  }
+                />
+                {/* Faculty-only */}
+                <Route
+                  path="performance"
+                  element={
+                    <RoleGate roles={["faculty"]}>
+                      <FacultyPerformance />
+                    </RoleGate>
+                  }
+                />
+                {/* Admin-only */}
+                <Route
+                  path="faculty"
+                  element={
+                    <RoleGate roles={["admin"]}>
+                      <AdminFaculty />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="companies"
+                  element={
+                    <RoleGate roles={["admin"]}>
+                      <AdminCompanies />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="verification"
+                  element={
+                    <RoleGate roles={["admin"]}>
+                      <AdminVerification />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="rankings"
+                  element={
+                    <RoleGate roles={["admin"]}>
+                      <AdminRankings />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="analytics"
+                  element={
+                    <RoleGate roles={["admin"]}>
+                      <AdminAnalytics />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="announcements"
+                  element={
+                    <RoleGate roles={["admin"]}>
+                      <AdminAnnouncements />
+                    </RoleGate>
+                  }
+                />
+                {/* Company-only */}
+                <Route
+                  path="candidates"
+                  element={
+                    <RoleGate roles={["company"]}>
+                      <CompanyCandidates />
+                    </RoleGate>
+                  }
+                />
+                <Route
+                  path="interns"
+                  element={
+                    <RoleGate roles={["company"]}>
+                      <CompanyInterns />
+                    </RoleGate>
+                  }
+                />
+                {/* Everyone */}
+                <Route path="notifications" element={<NotificationsPage />} />
+              </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

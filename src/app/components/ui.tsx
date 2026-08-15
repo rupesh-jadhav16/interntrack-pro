@@ -220,7 +220,10 @@ export function Heatmap({
   totalDays?: number;
   today: number;
 }) {
-  const start = today - (totalDays - 1) * 86400000;
+  // align cells to local start-of-day so they match attendance keys
+  const d = new Date(today);
+  const todayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const start = todayStart - (totalDays - 1) * 86400000;
   const cells: { date: number; status?: string }[] = [];
   for (let i = 0; i < totalDays; i++) {
     cells.push({ date: start + i * 86400000, status: values.get(start + i * 86400000) });

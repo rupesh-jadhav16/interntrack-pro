@@ -408,6 +408,34 @@ export default function AppShell() {
         </div>
       </div>
 
+      {/* Mobile bottom nav */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-slate-200 bg-white/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+        {sections
+          .flatMap((s) => s.items)
+          .slice(0, 5)
+          .map((item) => {
+            const isActive = item.end
+              ? location.pathname === item.to
+              : location.pathname.startsWith(item.to);
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={cn(
+                  "flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2",
+                  isActive ? "text-indigo-600" : "text-slate-400",
+                )}
+              >
+                <item.icon className="size-[18px]" />
+                <span className="max-w-full truncate text-[9px] font-semibold">
+                  {item.label}
+                </span>
+              </NavLink>
+            );
+          })}
+      </nav>
+
       {/* Main */}
       <div className="lg:pl-[228px]">
         <header className="sticky top-0 z-30 hidden items-center justify-between border-b border-slate-200/80 bg-[#f8fafc]/85 px-8 py-3.5 backdrop-blur lg:flex">
@@ -440,7 +468,7 @@ export default function AppShell() {
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="mx-auto w-full max-w-[1200px] px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
           <Outlet />
         </main>
       </div>
