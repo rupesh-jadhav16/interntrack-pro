@@ -1,55 +1,48 @@
-/* API client with JWT auth */
-const API = (() => {
-  const TOKEN_KEY = "it_token";
-  let token = localStorage.getItem(TOKEN_KEY) || "";
+/* InternTracker API client — JWT stored in localStorage */
+const API = {
+  token: () => localStorage.getItem("it_token"),
+  setToken: (t) => localStorage.setItem("it_token", t),
+  clear: () => localStorage.removeItem("it_token"),
 
-  async function req(method, path, body) {
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = "Bearer " + token;
+  async req(method, path, body) {
+    const headers = {};
+    const t = this.token();
+    if (t) headers["Authorization"] = "Bearer " + t;
+    let payload;
+    if (body instanceof FormData) {
+      payload = body;
+    } else if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      payload = JSON.stringify(body);
+    }
     let res;
     try {
-      res = await fetch("/api" + path, {
-        method,
-        headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      });
+      res = await fetch(path, { method, headers, body: payload });
     } catch (e) {
-      throw { status: 0, message: "Cannot reach server. Is uvicorn running?" };
+      throw new Error("Cannot reach the server. Is uvicorn running?");
     }
-    let data = null;
-    try { data = await res.json(); } catch (e) { /* no body */ }
-    if (res.status === 401) {
-      localStorage.removeItem(TOKEN_KEY);
-      token = "";
-      if (!location.pathname.includes("index")) location.href = "/";
-      throw { status: 401, message: "Session expired. Please sign in again." };
+    if (res.status === 401 && !path.startsWith("/api/auth/login")) {
+      API.clear();
+      location.href = "/";
+      throw new Error("Session expired — please sign in again");
     }
-    if (!res.ok) {
-      throw { status: res.status, message: (data && data.detail) || "Request failed (" + res.status + ")" };
-    }
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) { /* non-JSON response */ }
+    if (!res.ok) throw new Error(data.detail || data.message || "Request failed (" + res.status + ")");
     return data;
-  }
+  },
 
-  async function upload(file) {
+  get: (p) => API.req("GET", p),
+  post: (p, b) => API.req("POST", p, b),
+  put: (p, b) => API.req("PUT", p, b),
+  del: (p) => API.req("DELETE", p),
+
+  async upload(file) {
     const fd = new FormData();
     fd.append("file", file);
-    const headers = {};
-    if (token) headers["Authorization"] = "Bearer " + token;
-    const res = await fetch("/api/upload", { method: "POST", headers, body: fd });
-    const data = await res.json();
-    if (!res.ok) throw { status: res.status, message: data.detail || "Upload failed" };
-    return data.url;
-  }
-
-  return {
-    get: (p) => req("GET", p),
-    post: (p, b) => req("POST", p, b),
-    patch: (p, b) => req("PATCH", p, b),
-    del: (p) => req("DELETE", p),
-    upload,
-    setToken: (t) => { token = t; localStorage.setItem(TOKEN_KEY, t); },
-    getToken: () => token,
-    clear: () => { token = ""; localStorage.removeItem(TOKEN_KEY); },
-    isAuthed: () => !!token,
-  };
-})();
+    const res = await this.req("POST", "/api/upload", fd);
+    return res.path;
+  },
+};

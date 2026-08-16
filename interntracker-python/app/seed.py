@@ -1,244 +1,361 @@
-"""Seed demo data so every dashboard looks populated on first run.
-
-Runs automatically on startup when the users table is empty.
-Demo logins (all password "demo123" except where noted):
-  student@college.edu        - star student (active internship, full activity)
-  faculty@college.edu        - faculty mentor
-  admin@college.edu          - T&P Cell admin
-  techflowsystems@demo.com   - verified company
-  nextgenrobotics@demo.com   - pending-verification company
-"""
+"""Demo data seeded on first startup (only when the users table is empty)."""
+import json
 import random
 from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from .models import (
-    ActivityLog, Announcement, Application, Attendance, Certificate, CompanyProfile, DailyReport,
-    Enrollment, FacultyProfile, Internship, Notification, RewardLog, SavedInternship,
-    StudentProfile, User, WeeklyReport,
+    Announcement,
+    Application,
+    Attendance,
+    Certificate,
+    Company,
+    Internship,
+    Notification,
+    ReportDaily,
+    ReportWeekly,
+    Reward,
+    RewardConfig,
+    SavedInternship,
+    StudentProfile,
+    Tracker,
+    User,
 )
-from .security import hash_password, notify
+from .security import hash_password
 
-random.seed(42)
-
-
-def _user(db, name, email, password, role):
-    u = User(name=name, email=email, password_hash=hash_password(password), role=role)
-    db.add(u)
-    db.flush()
-    return u
-
-
-def _company(db, name, industry, location, status, desc, website=""):
-    u = _user(db, name, f"{name.lower().replace(' ', '')}@demo.com", "company123", "company")
-    cp = CompanyProfile(user_id=u.id, name=name, official_email=u.email, website=website or f"https://{name.lower().replace(' ', '')}.com",
-                        industry=industry, location=location, description=desc, verification_status=status,
-                        verified_at=datetime.utcnow() if status == "verified" else None)
-    db.add(cp)
-    return u
+CITY_COORDS = {
+    "Bangalore": (12.9716, 77.5946),
+    "Hyderabad": (17.3850, 78.4867),
+    "Pune": (18.5204, 73.8567),
+    "Mumbai": (19.0760, 72.8777),
+    "Delhi": (28.7041, 77.1025),
+    "Chennai": (13.0827, 80.2707),
+    "Gurugram": (28.4595, 77.0266),
+    "Noida": (28.5355, 77.3910),
+}
 
 
-def _internship(db, company, title, domain, mode, location, paid, stipend, duration, skills, deadline_in, intern_type="fulltime"):
-    i = Internship(company_id=company.id, title=title, domain=domain, mode=mode, location=location,
-                   paid=paid, stipend=stipend, duration=duration, skills=skills,
-                   deadline=date.today() + timedelta(days=deadline_in), status="open",
-                   posted_at=datetime.utcnow() - timedelta(days=random.randint(2, 20)), intern_type=intern_type)
-    db.add(i)
-    db.flush()
-    return i
+def _days_ago(n: int) -> date:
+    return date.today() - timedelta(days=n)
 
 
-def seed_if_empty(db: Session):
+def _dt_days_ago(n: int) -> datetime:
+    return datetime.utcnow() - timedelta(days=n)
+
+
+def seed(db: Session):
     if db.query(User).count() > 0:
         return
 
-    # ---- staff ------------------------------------------------------------
-    admin = _user(db, "Rohan Verma", "admin@college.edu", "admin123", "admin")
-    faculty = _user(db, "Dr. Meera Sharma", "faculty@college.edu", "faculty123", "faculty")
-    db.add(FacultyProfile(user_id=faculty.id, department="Computer Science", designation="Associate Professor"))
+    today = date.today()
 
-    # ---- companies --------------------------------------------------------
-    techflow = _company(db, "TechFlow Systems", "Software", "Bengaluru", "verified",
-                        "Product engineering studio building web platforms for edtech and fintech.")
-    quanta = _company(db, "Quantum Metrics", "Data & Analytics", "Pune", "verified",
-                      "Data analytics consulting with a focus on dashboards and ML pipelines.")
-    innovax = _company(db, "InnovateX Corp", "Product", "Hyderabad", "verified",
-                       "Consumer product lab shipping mobile and web experiences.")
-    nextgen = _company(db, "NextGen Robotics", "Robotics / IoT", "Chennai", "pending",
-                       "Robotics startup working on industrial automation. Verification in progress.")
-    cloudnine = _company(db, "CloudNine Digital", "Marketing Tech", "Remote", "verified",
-                         "Remote-first marketing automation company.")
-    greenfield = _company(db, "GreenField AgriTech", "AgriTech", "Nagpur", "rejected",
-                          "Agritech venture (registration docs incomplete).")
+    # ------------------------------------------------------------------ users
+    admin = User(
+        role="admin", email="admin@college.edu", password_hash=hash_password("admin123"),
+        name="Dr. Priya Sharma", faculty_department="Training & Placement", faculty_designation="T&P Cell Head",
+    )
+    faculty = User(
+        role="faculty", email="faculty@college.edu", password_hash=hash_password("faculty123"),
+        name="Prof. Ramesh Iyer", faculty_department="Computer Science", faculty_designation="Associate Professor",
+    )
+    db.add_all([admin, faculty])
+    db.flush()
 
-    # ---- internships ------------------------------------------------------
-    skills = {
-        "frontend": ["React", "TypeScript", "Tailwind", "CSS"],
-        "backend": ["Python", "FastAPI", "PostgreSQL", "Docker"],
-        "data": ["Python", "SQL", "Pandas", "Power BI"],
-        "ml": ["Python", "TensorFlow", "Scikit-learn", "NLP"],
-        "ux": ["Figma", "User Research", "Prototyping"],
-        "iot": ["Arduino", "C++", "Raspberry Pi", "Sensors"],
-    }
-    _internship(db, techflow, "Software Engineering Intern", "Software", "remote", "Bengaluru (Remote)",
-                True, "₹25,000 / month", "6 months", skills["frontend"] + skills["backend"], 18, "fulltime")
-    _internship(db, techflow, "Frontend Developer Intern", "Frontend", "hybrid", "Bengaluru",
-                True, "₹20,000 / month", "3 months", skills["frontend"], 12)
-    _internship(db, quanta, "Data Analytics Intern", "Data Science", "remote", "Pune (Remote)",
-                True, "₹22,000 / month", "4 months", skills["data"], 20)
-    _internship(db, quanta, "ML Research Intern", "Machine Learning", "onsite", "Pune",
-                False, "Certificate + stipend", "6 months", skills["ml"], 25)
-    _internship(db, innovax, "UX Research Intern", "Design", "onsite", "Hyderabad",
-                True, "₹18,000 / month", "3 months", skills["ux"], 10)
-    _internship(db, innovax, "Product Management Intern", "Product", "hybrid", "Hyderabad",
-                True, "₹20,000 / month", "4 months", ["Product", "Analytics", "Jira"], 15)
-    _internship(db, cloudnine, "Digital Marketing Intern", "Marketing", "remote", "Remote (India)",
-                True, "₹12,000 / month", "3 months", ["SEO", "Content", "Meta Ads"], 8, "parttime")
-    _internship(db, cloudnine, "Backend Engineering Intern", "Backend", "remote", "Remote (India)",
-                True, "₹24,000 / month", "6 months", skills["backend"], 22)
-    _internship(db, nextgen, "Robotics Automation Intern", "Robotics", "onsite", "Chennai",
-                True, "₹15,000 / month", "4 months", skills["iot"], 30)
-    _internship(db, nextgen, "Embedded Systems Intern", "Embedded", "hybrid", "Chennai",
-                True, "₹16,000 / month", "3 months", ["C", "Embedded C", "RTOS"], 14, "summer")
-
-    # ---- students ---------------------------------------------------------
-    star = _user(db, "Aarav Mehta", "student@college.edu", "student123", "student")
-    star_p = StudentProfile(user_id=star.id, college="Springfield Institute of Technology",
-                            department="Computer Science", branch="CSE", year="3", semester="6",
-                            cgpa=8.7, skills=["Python", "React", "SQL", "FastAPI"],
-                            bio="Final-year CSE student passionate about full-stack and data engineering.",
-                            mentor_id=faculty.id, points=1240)
-    db.add(star_p)
-
-    others = [
-        ("Ishita Rao", "ishita@college.edu", "Computer Science", "CSE", 8.9, ["Python", "ML", "SQL"], 980, 21),
-        ("Karan Joshi", "karan@college.edu", "Electronics", "ECE", 7.8, ["C++", "Embedded", "IoT"], 610, 12),
-        ("Sneha Patil", "sneha@college.edu", "Computer Science", "CSE", 9.1, ["React", "UI/UX", "Figma"], 1520, 34),
-        ("Rahul Sharma", "rahul@college.edu", "Mechanical", "MECH", 7.2, ["CAD", "SolidWorks"], 320, 0),
-        ("Priya Nair", "priya@college.edu", "Computer Science", "AIML", 8.4, ["Python", "NLP", "TensorFlow"], 740, 9),
+    students = [
+        dict(email="student@college.edu", password="student123", name="Aarav Mehta", department="Computer Science",
+             branch="CSE", year="3rd Year", cgpa=8.6, phone="+91 98450 12345", location="Bangalore",
+             skills="Python, React, SQL, FastAPI", points=1240, streak=12),
+        dict(email="ishita@college.edu", password="demo123", name="Ishita Rao", department="Computer Science",
+             branch="CSE", year="3rd Year", cgpa=9.1, phone="+91 98220 22334", location="Hyderabad",
+             skills="Java, Spring, PostgreSQL", points=860, streak=5),
+        dict(email="rohan@college.edu", password="demo123", name="Rohan Deshmukh", department="Electronics",
+             branch="ECE", year="4th Year", cgpa=7.8, phone="+91 97654 33445", location="Pune",
+             skills="Embedded C, IoT, Arduino", points=640, streak=2),
+        dict(email="sneha@college.edu", password="demo123", name="Sneha Kulkarni", department="Information Technology",
+             branch="IT", year="2nd Year", cgpa=8.9, phone="+91 98670 44556", location="Mumbai",
+             skills="UI/UX, Figma, HTML/CSS, JavaScript", points=520, streak=8),
+        dict(email="vikram@college.edu", password="demo123", name="Vikram Singh", department="Mechanical",
+             branch="ME", year="3rd Year", cgpa=7.2, phone="+91 98100 55667", location="Delhi",
+             skills="AutoCAD, SolidWorks, MATLAB", points=380, streak=0),
+        dict(email="ananya@college.edu", password="demo123", name="Ananya Nair", department="Computer Science",
+             branch="CSE", year="2nd Year", cgpa=9.4, phone="+91 99880 66778", location="Chennai",
+             skills="Python, ML, Pandas, NumPy", points=710, streak=6),
     ]
-    other_profiles = []
-    for name, email, dept, branch, cgpa, sk, pts, streak in others:
-        u = _user(db, name, email, "demo123", "student")
-        p = StudentProfile(user_id=u.id, college="Springfield Institute of Technology", department=dept,
-                           branch=branch, year="3" if dept != "Mechanical" else "4", semester="6" if dept != "Mechanical" else "8",
-                           cgpa=cgpa, skills=sk, mentor_id=faculty.id, points=pts,
-                           current_streak=streak, longest_streak=max(streak, 14))
-        db.add(p)
-        other_profiles.append(p)
 
-    # ---- star student activity -------------------------------------------
+    student_objs = []
+    for s in students:
+        u = User(
+            role="student", email=s["email"], password_hash=hash_password(s["password"]), name=s["name"],
+            department=s["department"], branch=s["branch"], year=s["year"], cgpa=s["cgpa"], phone=s["phone"],
+            location=s["location"], points=s["points"], streak=s["streak"],
+            last_active_date=today - timedelta(days=1),
+            profile_completed=True,
+        )
+        db.add(u)
+        db.flush()
+        db.add(StudentProfile(
+            user_id=u.id, department=s["department"], branch=s["branch"], year=s["year"], cgpa=s["cgpa"],
+            phone=s["phone"], location=s["location"], skills=s["skills"],
+            bio=f"Final-year {s['branch']} student passionate about building real-world software.",
+            linkedin=f"https://linkedin.com/in/{s['email'].split('@')[0]}",
+            github=f"https://github.com/{s['email'].split('@')[0]}",
+        ))
+        student_objs.append(u)
+
+    # mentor assignment
+    for st in student_objs:
+        st.mentor_id = faculty.id
+
+    # ----------------------------------------------------------------- companies
+    company_data = [
+        dict(email="techflowsystems@demo.com", name="TechFlow Systems", website="https://techflow.systems",
+             industry="Software", location="Bangalore", verified=True,
+             description="Product engineering studio building developer tools used by 40,000+ teams."),
+        dict(email="nextgenrobotics@demo.com", name="NextGen Robotics", website="https://nextgenrobotics.io",
+             industry="Robotics & AI", location="Pune", verified=False,
+             description="Autonomous robotics startup working on warehouse automation."),
+        dict(email="cloudsprint@demo.com", name="CloudSprint", website="https://cloudsprint.dev",
+             industry="Cloud Infrastructure", location="Hyderabad", verified=True,
+             description="Cloud-native platform startup, backed by top VCs."),
+        dict(email="datanest@demo.com", name="DataNest Analytics", website="https://datanest.ai",
+             industry="Data & AI", location="Mumbai", verified=True,
+             description="Analytics consultancy serving fintech and e-commerce clients."),
+        dict(email="finlytics@demo.com", name="Finlytics", website="https://finlytics.in",
+             industry="Fintech", location="Gurugram", verified=False,
+             description="AI-powered credit scoring for MSME lending."),
+        dict(email="greengrid@demo.com", name="GreenGrid Energy", website="https://greengrid.energy",
+             industry="CleanTech", location="Chennai", verified=True,
+             description="Solar + storage optimization for industrial campuses."),
+    ]
+    comp_objs = []
+    for cd in company_data:
+        u = User(
+            role="company", email=cd["email"], password_hash=hash_password("company123"),
+            name=cd["name"], company_name=cd["name"], company_website=cd["website"],
+            company_industry=cd["industry"], company_description=cd["description"],
+            verified=cd["verified"], verification_status="verified" if cd["verified"] else "pending",
+        )
+        db.add(u)
+        db.flush()
+        c = Company(
+            user_id=u.id, name=cd["name"], website=cd["website"], industry=cd["industry"],
+            description=cd["description"], location=cd["location"],
+            status="verified" if cd["verified"] else "pending",
+        )
+        db.add(c)
+        db.flush()
+        comp_objs.append(c)
+
+    # ----------------------------------------------------------------- internships
+    internships = [
+        dict(company=0, title="Backend Engineering Intern", domain="Software Development", location="Bangalore",
+             mode="hybrid", duration=6, stipend="₹25,000/month", paid=True,
+             skills="Python,FastAPI,PostgreSQL,Docker", deadline=_days_ago(-12), seats=4),
+        dict(company=0, title="Frontend Developer Intern (React)", domain="Software Development", location="Remote",
+             mode="remote", duration=3, stipend="₹20,000/month", paid=True,
+             skills="React,TypeScript,Tailwind", deadline=_days_ago(-8), seats=6),
+        dict(company=1, title="Robotics Software Intern", domain="Robotics & AI", location="Pune",
+             mode="onsite", duration=3, stipend="₹15,000/month", paid=True,
+             skills="Python,ROS,C++,Computer Vision", deadline=_days_ago(-5), seats=2),
+        dict(company=2, title="DevOps Intern", domain="Cloud Infrastructure", location="Hyderabad",
+             mode="hybrid", duration=4, stipend="₹22,000/month", paid=True,
+             skills="AWS,Kubernetes,Terraform,CI/CD", deadline=_days_ago(-15), seats=3),
+        dict(company=2, title="Platform Engineer Intern", domain="Cloud Infrastructure", location="Remote",
+             mode="wfh", duration=6, stipend="₹18,000/month", paid=True,
+             skills="Go,Linux,Git,Docker", deadline=_days_ago(-10), seats=5),
+        dict(company=3, title="Data Science Intern", domain="Data & AI", location="Mumbai",
+             mode="hybrid", duration=4, stipend="₹20,000/month", paid=True,
+             skills="Python,Pandas,ML,SQL", deadline=_days_ago(-7), seats=3),
+        dict(company=3, title="BI Analyst Intern", domain="Data & AI", location="Remote",
+             mode="remote", duration=3, stipend="Unpaid", paid=False,
+             skills="Excel,SQL,PowerBI,Tableau", deadline=_days_ago(-20), seats=8),
+        dict(company=4, title="Fintech ML Intern", domain="Fintech", location="Gurugram",
+             mode="onsite", duration=4, stipend="₹25,000/month", paid=True,
+             skills="Python,Scikit-learn,Finance", deadline=_days_ago(-9), seats=2),
+        dict(company=5, title="Energy Data Analyst Intern", domain="CleanTech", location="Chennai",
+             mode="onsite", duration=3, stipend="₹12,000/month", paid=True,
+             skills="Python,Data Analysis,IoT", deadline=_days_ago(-14), seats=3),
+        dict(company=5, title="UI/UX Design Intern", domain="Design", location="Remote",
+             mode="remote", duration=3, stipend="₹10,000/month", paid=True,
+             skills="Figma,Wireframing,Prototyping", deadline=_days_ago(-11), seats=2),
+    ]
+    intern_objs = []
+    for idx, inv in enumerate(internships):
+        comp = comp_objs[inv["company"]]
+        lat, lng = CITY_COORDS.get(inv["location"], (None, None))
+        i = Internship(
+            company_id=comp.id, title=inv["title"], domain=inv["domain"], location=inv["location"],
+            mode=inv["mode"], duration_months=inv["duration"], stipend=inv["stipend"], paid=inv["paid"],
+            skills=inv["skills"], seats=inv["seats"], deadline=inv["deadline"], status="open",
+            posted_at=_dt_days_ago(7 + idx), latitude=lat, longitude=lng,
+            description=f"{comp.name} is hiring an intern for the {inv['title'].lower().replace(' intern', '')} role. "
+                        f"Work with a fast-moving team, get real ownership, mentorship and a completion certificate.",
+        )
+        db.add(i)
+        db.flush()
+        intern_objs.append(i)
+
+    # ----------------------------------------------------------------- activity: main student
+    main = student_objs[0]
+    comp0 = comp_objs[0]
+
+    # saved internships
+    for intern_idx in (2, 4, 8):
+        db.add(SavedInternship(student_id=main.id, internship_id=intern_objs[intern_idx].id, saved_at=_dt_days_ago(3)))
+
     # applications
-    internships = db.query(Internship).all()
-    t1 = internships[0]
-    t2 = internships[2]
-    a1 = Application(student_id=star.id, internship_id=t1.id, status="interview",
-                     applied_at=datetime.utcnow() - timedelta(days=9),
-                     interview_date=date.today() + timedelta(days=3))
-    a2 = Application(student_id=star.id, internship_id=t2.id, status="shortlisted",
-                     applied_at=datetime.utcnow() - timedelta(days=4))
-    db.add_all([a1, a2])
-    db.add(SavedInternship(student_id=star.id, internship_id=internships[3].id))
-    db.add(SavedInternship(student_id=star.id, internship_id=internships[6].id))
+    app1 = Application(
+        student_id=main.id, internship_id=intern_objs[0].id, status="joined",
+        applied_at=_dt_days_ago(30), updated_at=_dt_days_ago(21),
+        cover_letter="I have built production APIs with FastAPI and want to learn how TechFlow ships at scale.",
+        stage_history=json.dumps([
+            {"stage": "applied", "at": (_dt_days_ago(30)).isoformat()},
+            {"stage": "shortlisted", "at": (_dt_days_ago(27)).isoformat()},
+            {"stage": "interview", "at": (_dt_days_ago(24)).isoformat()},
+            {"stage": "selected", "at": (_dt_days_ago(22)).isoformat()},
+            {"stage": "joined", "at": (_dt_days_ago(21)).isoformat()},
+        ]),
+    )
+    app2 = Application(
+        student_id=main.id, internship_id=intern_objs[1].id, status="interview",
+        applied_at=_dt_days_ago(6), updated_at=_dt_days_ago(2),
+        cover_letter="React is my strongest stack — I'd love to contribute to your component library.",
+        stage_history=json.dumps([
+            {"stage": "applied", "at": (_dt_days_ago(6)).isoformat()},
+            {"stage": "under_review", "at": (_dt_days_ago(4)).isoformat()},
+            {"stage": "shortlisted", "at": (_dt_days_ago(3)).isoformat()},
+            {"stage": "interview", "at": (_dt_days_ago(2)).isoformat()},
+        ]),
+    )
+    app3 = Application(
+        student_id=main.id, internship_id=intern_objs[5].id, status="rejected",
+        applied_at=_dt_days_ago(10), updated_at=_dt_days_ago(8),
+        cover_letter="Strong ML fundamentals and real dataset experience.",
+        stage_history=json.dumps([
+            {"stage": "applied", "at": (_dt_days_ago(10)).isoformat()},
+            {"stage": "rejected", "at": (_dt_days_ago(8)).isoformat()},
+        ]),
+    )
+    db.add_all([app1, app2, app3])
 
-    # enrollment at TechFlow (the internship the star "joined" earlier)
-    start = date.today() - timedelta(days=45)
-    enr = Enrollment(student_id=star.id, internship_id=t1.id, company_name="TechFlow Systems",
-                     role="Software Engineering Intern", start_date=start, end_date=date.today() + timedelta(days=135),
-                     mentor="Ms. Ananya Gupta", mode="remote", location="Bengaluru (Remote)",
-                     intern_type="off_campus", status="active")
-    db.add(enr)
-
-    # attendance + daily reports for last 45 days (weekdays)
-    task_pool = [
-        ("Built REST endpoints for the user module", "Learned FastAPI dependency injection", "Slow join queries on Postgres", "Optimize with indexes"),
-        ("Wired React forms to the API", "Learned controlled components + validation", "State sync bugs", "Add form validation"),
-        ("Wrote unit tests for auth flow", "Learned pytest fixtures", "Mocking external calls", "Cover edge cases"),
-        ("Designed dashboard heatmap component", "Learned CSS grid + color scales", "Responsive on mobile", "Polish mobile layout"),
-        ("Code review + refactor of API layer", "Learned clean architecture patterns", "Circular imports", "Split modules"),
+    # other students' applications
+    other_apps = [
+        (student_objs[1], intern_objs[3], "under_review", 4),
+        (student_objs[1], intern_objs[0], "shortlisted", 2),
+        (student_objs[2], intern_objs[2], "applied", 3),
+        (student_objs[3], intern_objs[9], "interview", 2),
+        (student_objs[4], intern_objs[6], "applied", 5),
+        (student_objs[5], intern_objs[5], "selected", 3),
     ]
-    day = start
-    while day <= date.today():
-        if day.weekday() < 5:  # weekdays
-            r = random.choice(task_pool)
-            db.add(Attendance(student_id=star.id, enrollment_id=enr.id, date=day, status="present",
-                              check_in="09:30", check_out="18:00", hours=8.0,
-                              summary=r[0], tasks=[r[0]], verified=True))
-            db.add(DailyReport(student_id=star.id, date=day, tasks=r[0], learned=r[1], problems=r[2],
-                               plan=r[3], hours=8.0, status="approved",
-                               submitted_at=datetime.combine(day, datetime.min.time()) + timedelta(hours=19)))
-            if random.random() < 0.6:
-                db.add(RewardLog(student_id=star.id, points=10, reason="Daily report",
-                                 created_at=datetime.combine(day, datetime.min.time()) + timedelta(hours=19)))
-        else:
-            db.add(Attendance(student_id=star.id, enrollment_id=enr.id, date=day, status="holiday", hours=0.0))
-        day += timedelta(days=1)
-    star_p.last_report_date = date.today() - timedelta(days=1)
-    star_p.current_streak = 14
-    star_p.longest_streak = 32
-    star_p.badges = ["First Report", "7 Day Streak", "30 Day Streak", "Consistent Intern"]
-    star_p.points = 1240
+    for stu, inv, status, days in other_apps:
+        db.add(Application(
+            student_id=stu.id, internship_id=inv.id, status=status,
+            applied_at=_dt_days_ago(days), updated_at=_dt_days_ago(max(0, days - 1)),
+            cover_letter="I'm excited about this role and ready to contribute from day one.",
+            stage_history=json.dumps([{"stage": status, "at": (_dt_days_ago(days)).isoformat()}]),
+        ))
 
-    # weekly reports
-    for w in range(2):
-        ws = start + timedelta(days=(6 - start.weekday()) + w * 7)
-        db.add(WeeklyReport(student_id=star.id, week_start=ws, total_days=5, attendance_pct=100,
-                            total_hours=40, tasks="Completed API module + tests", skills="FastAPI, SQLAlchemy",
-                            problems="None major", progress=60 + w * 20, status="approved",
-                            submitted_at=datetime.combine(ws + timedelta(days=6), datetime.min.time()) + timedelta(hours=20)))
+    # tracker for main student
+    tracker = Tracker(
+        student_id=main.id, internship_id=intern_objs[0].id, type="on-campus",
+        company="TechFlow Systems", role="Backend Engineering Intern",
+        start_date=_days_ago(21), end_date=_days_ago(-70), mentor_name="Anita Krishnan",
+        mentor_email="anita@techflow.systems", mode="hybrid", location="Bangalore",
+        offer_letter_path="/uploads/offer-techflow.pdf", status="active",
+        created_at=_dt_days_ago(21),
+    )
+    db.add(tracker)
+    db.flush()
 
-    # other students: light activity
-    ishita_p = other_profiles[0]
-    for d in range(10, 0, -1):
-        day = date.today() - timedelta(days=d)
-        if day.weekday() < 5:
-            db.add(DailyReport(student_id=ishita_p.user_id, date=day, tasks="EDA on internship dataset",
-                               learned="Pandas groupby", problems="Memory limits", plan="Feature engineering",
-                               hours=6, status="approved"))
-    priya_p = other_profiles[4]
-    for d in range(6, 0, -1):
-        day = date.today() - timedelta(days=d)
-        if day.weekday() < 5:
-            db.add(DailyReport(student_id=priya_p.user_id, date=day, tasks="Tokenizer experiments",
-                               learned="HuggingFace pipelines", problems="GPU time", plan="Fine-tune model",
-                               hours=5, status="pending"))
-    rahul_p = other_profiles[3]
-    db.add(Enrollment(student_id=rahul_p.user_id, company_name="NextGen Robotics", role="Robotics Intern",
-                      start_date=date.today() - timedelta(days=20), end_date=date.today() + timedelta(days=70),
-                      mentor="Mr. Dev", mode="onsite", location="Chennai", intern_type="off_campus", status="active"))
+    # daily reports: approved for past 12 days except weekends
+    sample_content = [
+        "Built the JWT auth middleware for the internship API and wrote unit tests.",
+        "Designed the PostgreSQL schema for the reporting module; reviewed with mentor.",
+        "Implemented the leaderboard query and optimized it with an index.",
+        "Pair-programmed the file upload service with the team; fixed CORS issues.",
+        "Refactored the dashboard service to cut response time from 900ms to 210ms.",
+        "Wrote migration scripts and seeded test data for staging.",
+        "Added rate limiting to public endpoints and documented the API.",
+        "Reviewed PRs and improved test coverage to 86% for the core module.",
+    ]
+    d = _days_ago(14)
+    while d < today:
+        if d.weekday() < 5:
+            r = ReportDaily(
+                student_id=main.id, report_date=d,
+                content=random.choice(sample_content),
+                hours=random.choice([6.5, 7, 7.5, 8, 8.5]),
+                status="approved", points=10, reviewed_by=faculty.id,
+                feedback="Great progress, keep it up!", created_at=datetime.combine(d, datetime.min.time()),
+            )
+            db.add(r)
+            db.add(Attendance(
+                student_id=main.id, day=d, status="present",
+                check_in=datetime.combine(d, datetime(2000, 1, 1, 9, 30).time()),
+                check_out=datetime.combine(d, datetime(2000, 1, 1, 18, 0).time()),
+                hours=8.5,
+            ))
+        elif d.weekday() == 5:
+            db.add(Attendance(student_id=main.id, day=d, status="absent"))
+        d += timedelta(days=1)
+    # today: pending report + checked in
+    db.add(ReportDaily(student_id=main.id, report_date=today, content="Shipped the attendance API and started the weekly summary doc.", hours=3.5, status="pending"))
+    db.add(Attendance(student_id=main.id, day=today, status="present",
+                      check_in=datetime.combine(today, datetime(2000, 1, 1, 9, 15).time())))
 
-    # ---- certificates (verification queue) -------------------------------
-    db.add(Certificate(student_id=star.id, title="Internship Completion Certificate", cert_type="completion",
-                       company_name="TechFlow Systems", file_url="", notes="Completed 6 month software engineering internship.",
-                       score=82, status="verified",
-                       indicators=["Company matches a verified company in our registry", "Document attached"]))
-    db.add(Certificate(student_id=other_profiles[3].user_id, title="Summer Internship Certificate", cert_type="internship",
-                       company_name="NextGen Robotics", file_url="", notes="8 week summer internship in robotics.",
-                       score=55, status="review",
-                       indicators=["Company found in registry but not yet verified"]))
-    db.add(Certificate(student_id=other_profiles[2].user_id, title="Cert of Internship", cert_type="internship",
-                       company_name="Unregistered Ventures Ltd", file_url="", notes="paid certificate from online portal",
-                       score=22, status="suspicious",
-                       indicators=["Company not found in our verified registry", "Title is unusually short"]))
+    iso = today.isocalendar()
+    db.add(ReportWeekly(
+        student_id=main.id, week_label=f"{iso[0]}-W{iso[1]:02d}",
+        content="Completed the auth module, improved test coverage, and prepared the demo for the client call.",
+        highlights="Auth middleware, API docs, 2 PRs merged", status="pending", created_at=_dt_days_ago(1),
+    ))
 
-    # ---- notifications + announcements + logs ----------------------------
-    notify(db, star.id, "Interview scheduled 🎯", "Your interview for Software Engineering Intern at TechFlow Systems is on "
-           + (date.today() + timedelta(days=3)).strftime("%d %b") + ".", "interview")
-    notify(db, star.id, "Weekly report due", "Your weekly summary for this week is pending submission.", "deadline")
-    notify(db, star.id, "Badge unlocked: Consistent Intern", "You've been consistently reporting for 30+ days.", "reward")
-    notify(db, star.id, "Certificate verified 🟢", "Your TechFlow completion certificate scored 82/100.", "certificate")
-    db.add(Announcement(title="Placement drive: TechFlow Systems", body="On-campus hiring for SDE roles. Register in the T&P office by Friday.", created_by=admin.id))
-    db.add(Announcement(title="Internship report guidelines", body="All active interns must submit daily reports before 11 PM. Missing 3+ days resets your streak.", created_by=admin.id))
-    db.add(ActivityLog(actor_id=admin.id, action="admin.verify_company", detail="TechFlow Systems -> verified"))
-    db.add(ActivityLog(actor_id=star.id, action="report.submit", detail="daily report"))
-    db.add(ActivityLog(actor_id=nextgen.id, action="company.verify_request", detail="NextGen Robotics"))
+    # rewards history
+    rewards = [
+        (main, 10, "Daily report approved", "report"), (main, 10, "Daily report approved", "report"),
+        (main, 50, "Weekly report approved", "report"), (main, 5, "Daily check-in", "attendance"),
+        (main, 10, "Daily report approved", "report"), (main, 100, "Tracker activated", "tracker"),
+        (student_objs[1], 50, "Weekly report approved", "report"), (student_objs[3], 10, "Daily report approved", "report"),
+    ]
+    for u, pts, reason, badge in rewards:
+        db.add(Reward(user_id=u.id, points=pts, reason=reason, badge=badge, created_at=_dt_days_ago(2)))
+
+    # certificate pending for main student
+    db.add(Certificate(
+        student_id=main.id, tracker_id=tracker.id, code=f"INT-{main.id}-PENDING1",
+        title="Summer Internship Certificate", company="TechFlow Systems", issued_by="TechFlow Systems",
+        status="pending", doc_path="/uploads/cert-techflow.pdf", created_at=_dt_days_ago(2),
+    ))
+
+    # notifications
+    notifs = [
+        (main.id, "Interview scheduled", "Your interview with CloudSprint is on Friday at 11 AM.", "info", _dt_days_ago(1)),
+        (main.id, "Report approved ✅", "Your daily report was approved. +10 points.", "success", _dt_days_ago(1)),
+        (main.id, "New internship", "CloudSprint posted 'Platform Engineer Intern' matching your skills.", "system", _dt_days_ago(2)),
+        (student_objs[1].id, "Application shortlisted", "Your application for Backend Engineering Intern was shortlisted.", "success", _dt_days_ago(2)),
+        (student_objs[5].id, "You've been selected! 🎉", "DataNest Analytics selected you for Data Science Intern.", "success", _dt_days_ago(1)),
+    ]
+    for uid, title, msg, ntype, created in notifs:
+        db.add(Notification(user_id=uid, title=title, message=msg, type=ntype, created_at=created))
+
+    # reward config defaults
+    for key, label, value in [
+        ("daily_report", "Daily report approved", 10),
+        ("weekly_report", "Weekly report approved", 50),
+        ("attendance_day", "Daily check-in", 5),
+        ("internship_completed", "Internship completed", 200),
+        ("certificate_verified", "Certificate verified", 100),
+    ]:
+        db.add(RewardConfig(key=key, label=label, value=value))
+
+    db.add(Announcement(
+        title="Placement season is live!", audience="students", created_by=admin.id, created_at=_dt_days_ago(2),
+        message="Companies are posting internships for the winter batch. Complete your profile to increase your chances.",
+    ))
+    db.add(Announcement(
+        title="New verification policy", audience="companies", created_by=admin.id, created_at=_dt_days_ago(5),
+        message="All company profiles must be verified by the T&P cell before posting internships.",
+    ))
 
     db.commit()
-    print("Seeded demo data:")
-    print("  admin@college.edu / admin123      (T&P Cell)")
-    print("  faculty@college.edu / faculty123  (Faculty)")
-    print("  student@college.edu / student123  (Student - full demo)")
-    print("  techflowsystems@demo.com / company123  (Verified company)")
-    print("  nextgenrobotics@demo.com / company123  (Pending company)")
-    print("  Others: demo123")

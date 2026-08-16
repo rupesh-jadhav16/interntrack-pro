@@ -1,260 +1,358 @@
-"""Company endpoints: profile, internships, applications, intern monitoring."""
+"""Company endpoints: profile, post/manage internships, applicant pipeline, intern monitor."""
+import json
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..config import APPLICATION_STAGES
 from ..database import get_db
-from ..models import (Application, Attendance, CompanyProfile, DailyReport, Enrollment, InternFeedback,
-                      Internship, Notification, User, WeeklyReport)
-from ..security import get_current_user, log_activity, notify, require_role
+from ..models import (
+    Application,
+    Attendance,
+    Company,
+    Feedback,
+    Internship,
+    ReportDaily,
+    Tracker,
+    User,
+)
+from ..security import (
+    company_payload,
+    internship_payload,
+    log_action,
+    notify,
+    public_user,
+    require_company,
+)
 
-router = APIRouter(prefix="/api/company", tags=["company"])
-company_only = require_role("company")
-
-STAGES = ("applied", "under_review", "shortlisted", "interview", "selected", "rejected", "joined", "completed")
+router = APIRouter(prefix="/api", tags=["company"])
 
 
-def _company(db: Session, cid: int) -> CompanyProfile:
-    cp = db.query(CompanyProfile).filter_by(user_id=cid).first()
-    if cp is None:
-        raise HTTPException(400, "Company profile not set up")
-    return cp
+def _company(db: Session, user: User) -> Company:
+    c = db.query(Company).filter(Company.user_id == user.id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Company profile not found")
+    return c
 
 
-def _my_internship_ids(db: Session, cid: int):
-    return [i.id for i in db.query(Internship).filter_by(company_id=cid).all()]
+def _own_internship_ids(db: Session, user: User):
+    comp = _company(db, user)
+    return [i.id for i in db.query(Internship).filter(Internship.company_id == comp.id).all()]
 
 
-@router.get("/dashboard")
-def dashboard(user: User = Depends(company_only), db: Session = Depends(get_db)):
-    cp = _company(db, user.id)
-    internships = db.query(Internship).filter_by(company_id=user.id).all()
-    iids = [i.id for i in internships]
-    apps = db.query(Application).filter(Application.internship_id.in_(iids)).all() if iids else []
-    interns = []
-    if iids:
-        interns = db.query(Enrollment).filter(Enrollment.internship_id.in_(iids), Enrollment.status == "active").all()
-    recent = sorted(apps, key=lambda a: a.applied_at or datetime.min, reverse=True)[:6]
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+@router.get("/company/dashboard")
+def company_dashboard(user: User = Depends(require_company), db: Session = Depends(get_db)):
+    comp = _company(db, user)
+    internships = db.query(Internship).filter(Internship.company_id == comp.id).all()
+    ids = [i.id for i in internships]
+    applications = db.query(Application).filter(Application.internship_id.in_(ids)).all() if ids else []
+
+    status_counts = {}
+    for a in applications:
+        status_counts[a.status] = status_counts.get(a.status, 0) + 1
+
+    interns = [a for a in applications if a.status == "joined"]
+
     return {
-        "verification_status": cp.verification_status,
-        "stats": {"internships": len(internships), "open": sum(1 for i in internships if i.status == "open"),
-                  "applications": len(apps), "shortlisted": sum(1 for a in apps if a.status == "shortlisted"),
-                  "interviews": sum(1 for a in apps if a.status == "interview"),
-                  "interns": len(interns)},
-        "recent_applications": [{"id": a.id, "student": db.get(User, a.student_id).name,
-                                 "title": a.internship.title if a.internship else "", "status": a.status,
-                                 "applied_at": a.applied_at.isoformat() if a.applied_at else None} for a in recent],
+        "company": company_payload(comp),
+        "verified": bool(user.verified),
+        "verification_status": user.verification_status,
+        "internship_count": len(internships),
+        "open_internships": sum(1 for i in internships if i.status == "open"),
+        "application_count": len(applications),
+        "intern_count": len(interns),
+        "status_counts": status_counts,
+        "interns": [
+            {
+                "id": a.id,
+                "student": public_user(a.student),
+                "internship": a.internship.title,
+                "joined_at": a.updated_at.isoformat() if a.updated_at else None,
+            }
+            for a in interns
+        ],
+        "user": public_user(user),
     }
 
 
-@router.get("/profile")
-def profile(user: User = Depends(company_only), db: Session = Depends(get_db)):
-    cp = _company(db, user.id)
-    return {"name": cp.name, "official_email": cp.official_email, "website": cp.website,
-            "industry": cp.industry, "location": cp.location, "description": cp.description,
-            "registration_info": cp.registration_info, "docs": cp.docs or [], "logo_url": cp.logo_url,
-            "verification_status": cp.verification_status,
-            "verified_at": cp.verified_at.isoformat() if cp.verified_at else None}
+# ---------------------------------------------------------------------------
+# Profile + verification re-submit
+# ---------------------------------------------------------------------------
+@router.get("/company/profile")
+def company_profile(user: User = Depends(require_company), db: Session = Depends(get_db)):
+    comp = _company(db, user)
+    return {
+        "company": company_payload(comp),
+        "verified": bool(user.verified),
+        "verification_status": user.verification_status,
+        "verification_note": user.verification_note,
+        "user": public_user(user),
+    }
 
 
 class CompanyProfileIn(BaseModel):
-    name: str = ""
+    name: str
     website: str = ""
     industry: str = ""
-    location: str = ""
     description: str = ""
-    logo_url: str = ""
+    location: str = ""
+    docs: str = ""
 
 
-@router.patch("/profile")
-def update_profile(data: CompanyProfileIn, user: User = Depends(company_only), db: Session = Depends(get_db)):
-    cp = _company(db, user.id)
-    if data.name:
-        cp.name = data.name
-    cp.website = data.website or cp.website
-    cp.industry = data.industry or cp.industry
-    cp.location = data.location or cp.location
-    cp.description = data.description or cp.description
-    cp.logo_url = data.logo_url or cp.logo_url
+@router.put("/company/profile")
+def update_company_profile(data: CompanyProfileIn, user: User = Depends(require_company), db: Session = Depends(get_db)):
+    comp = _company(db, user)
+    comp.name = data.name.strip()
+    comp.website = data.website or None
+    comp.industry = data.industry or None
+    comp.description = data.description or None
+    comp.location = data.location or None
+    if data.docs:
+        comp.docs = data.docs
+    user.company_name = comp.name
+    user.company_website = comp.website
+    user.company_industry = comp.industry
+    user.company_description = comp.description
+    # re-submit for verification if not verified
+    if not user.verified:
+        comp.status = "pending"
+        user.verification_status = "pending"
     db.commit()
+    log_action(db, user, "company_profile", "Updated company profile")
     return {"ok": True}
 
 
-class VerifyRequestIn(BaseModel):
-    registration_info: str = ""
-    docs: list[str] = []
-
-
-@router.post("/verify-request")
-def submit_verification(user: User = Depends(company_only), db: Session = Depends(get_db)):
-    cp = _company(db, user.id)
-    cp.verification_status = "pending"
-    db.commit()
-    for admin in db.query(User).filter_by(role="admin").all():
-        notify(db, admin.id, "Company verification requested", f"{cp.name} submitted for verification", "company")
-    db.commit()
-    log_activity(db, user.id, "company.verify_request", cp.name)
-    db.commit()
-    return {"ok": True}
-
-
+# ---------------------------------------------------------------------------
+# Internships
+# ---------------------------------------------------------------------------
 class InternshipIn(BaseModel):
     title: str = Field(min_length=3)
     description: str = ""
-    mode: str = "remote"
-    location: str = ""
-    paid: bool = True
-    stipend: str = ""
-    duration: str = "3 months"
     domain: str = ""
+    location: str = ""
+    mode: str = "remote"
+    duration_months: int = 3
+    stipend: str = "Unpaid"
+    paid: bool = False
     skills: list[str] = []
-    intern_type: str = "fulltime"
+    seats: int = 1
     deadline: date | None = None
 
 
-@router.get("/internships")
-def my_internships(user: User = Depends(company_only), db: Session = Depends(get_db)):
-    rows = db.query(Internship).filter_by(company_id=user.id).order_by(Internship.posted_at.desc()).all()
-    return {"items": [{"id": i.id, "title": i.title, "description": i.description, "mode": i.mode,
-                       "location": i.location, "paid": i.paid, "stipend": i.stipend, "duration": i.duration,
-                       "domain": i.domain, "skills": i.skills or [], "intern_type": i.intern_type,
-                       "deadline": i.deadline.isoformat() if i.deadline else None, "status": i.status,
-                       "applications": db.query(Application).filter_by(internship_id=i.id).count()} for i in rows]}
-
-
-@router.post("/internships")
-def create_internship(data: InternshipIn, user: User = Depends(company_only), db: Session = Depends(get_db)):
-    i = Internship(company_id=user.id, title=data.title, description=data.description, mode=data.mode,
-                   location=data.location, paid=data.paid, stipend=data.stipend, duration=data.duration,
-                   domain=data.domain, skills=data.skills, intern_type=data.intern_type,
-                   deadline=data.deadline, status="open")
+@router.post("/company/internships")
+def create_internship(data: InternshipIn, user: User = Depends(require_company), db: Session = Depends(get_db)):
+    comp = _company(db, user)
+    i = Internship(
+        company_id=comp.id,
+        title=data.title.strip(),
+        description=data.description or None,
+        domain=data.domain or None,
+        location=data.location or None,
+        mode=data.mode,
+        duration_months=data.duration_months,
+        stipend=data.stipend or "Unpaid",
+        paid=data.paid,
+        skills=",".join(data.skills) if data.skills else None,
+        seats=data.seats,
+        deadline=data.deadline,
+        status="open",
+    )
     db.add(i)
-    db.flush()
-    for student in db.query(User).filter_by(role="student").all():
-        notify(db, student.id, "New internship posted", f"{data.title} at {_company(db, user.id).name}", "internship")
     db.commit()
-    log_activity(db, user.id, "company.post_internship", data.title)
-    db.commit()
-    return {"ok": True, "id": i.id}
+    db.refresh(i)
+    log_action(db, user, "internship_posted", f"Posted '{i.title}'")
+    return internship_payload(i)
 
 
-@router.patch("/internships/{iid}")
-def update_internship(iid: int, data: InternshipIn, user: User = Depends(company_only), db: Session = Depends(get_db)):
-    i = db.get(Internship, iid)
-    if i is None or i.company_id != user.id:
-        raise HTTPException(404, "Internship not found")
-    for f in ("title", "description", "mode", "location", "stipend", "duration", "domain", "intern_type"):
-        setattr(i, f, getattr(data, f))
+@router.put("/company/internships/{internship_id}")
+def update_internship(internship_id: int, data: InternshipIn, user: User = Depends(require_company), db: Session = Depends(get_db)):
+    i = db.query(Internship).filter(Internship.id == internship_id).first()
+    if not i or i.company_id != _company(db, user).id:
+        raise HTTPException(status_code=404, detail="Internship not found")
+    i.title = data.title.strip()
+    i.description = data.description or None
+    i.domain = data.domain or None
+    i.location = data.location or None
+    i.mode = data.mode
+    i.duration_months = data.duration_months
+    i.stipend = data.stipend or "Unpaid"
     i.paid = data.paid
-    i.skills = data.skills
+    i.skills = ",".join(data.skills) if data.skills else None
+    i.seats = data.seats
     i.deadline = data.deadline
+    db.commit()
+    return internship_payload(i)
+
+
+@router.post("/company/internships/{internship_id}/close")
+def close_internship(internship_id: int, user: User = Depends(require_company), db: Session = Depends(get_db)):
+    i = db.query(Internship).filter(Internship.id == internship_id).first()
+    if not i or i.company_id != _company(db, user).id:
+        raise HTTPException(status_code=404, detail="Internship not found")
+    i.status = "closed"
     db.commit()
     return {"ok": True}
 
 
-@router.post("/internships/{iid}/close")
-def close_internship(iid: int, user: User = Depends(company_only), db: Session = Depends(get_db)):
-    i = db.get(Internship, iid)
-    if i is None or i.company_id != user.id:
-        raise HTTPException(404, "Internship not found")
-    i.status = "closed" if i.status == "open" else "open"
-    db.commit()
-    return {"ok": True, "status": i.status}
+@router.get("/company/internships")
+def my_internships(user: User = Depends(require_company), db: Session = Depends(get_db)):
+    comp = _company(db, user)
+    rows = (
+        db.query(Internship)
+        .filter(Internship.company_id == comp.id)
+        .order_by(Internship.posted_at.desc())
+        .all()
+    )
+    items = []
+    for i in rows:
+        payload = internship_payload(i)
+        payload["applicant_count"] = db.query(Application).filter(Application.internship_id == i.id).count()
+        items.append(payload)
+    return {"items": items}
 
 
-@router.get("/applications")
-def applications(internship_id: int | None = None, status: str = "",
-                 user: User = Depends(company_only), db: Session = Depends(get_db)):
-    iids = _my_internship_ids(db, user.id)
-    query = db.query(Application).filter(Application.internship_id.in_(iids)).order_by(Application.applied_at.desc())
-    if internship_id:
-        query = query.filter(Application.internship_id == internship_id)
-    if status:
-        query = query.filter(Application.status == status)
-    out = []
-    for a in query.limit(200).all():
-        student = db.get(User, a.student_id)
-        out.append({"id": a.id, "student_id": a.student_id, "student": student.name,
-                    "email": student.email, "internship_id": a.internship_id,
-                    "title": a.internship.title if a.internship else "", "status": a.status,
-                    "applied_at": a.applied_at.isoformat() if a.applied_at else None,
-                    "interview_date": a.interview_date.isoformat() if a.interview_date else None,
-                    "notes": a.notes})
-    return {"items": out}
+# ---------------------------------------------------------------------------
+# Applicant pipeline
+# ---------------------------------------------------------------------------
+@router.get("/company/applications")
+def applications(user: User = Depends(require_company), db: Session = Depends(get_db)):
+    ids = _own_internship_ids(db, user)
+    rows = (
+        db.query(Application)
+        .filter(Application.internship_id.in_(ids))
+        .order_by(Application.applied_at.desc())
+        .all()
+        if ids
+        else []
+    )
+    return {
+        "items": [
+            {
+                "id": a.id,
+                "status": a.status,
+                "applied_at": a.applied_at.isoformat() if a.applied_at else None,
+                "cover_letter": a.cover_letter,
+                "student": public_user(a.student),
+                "internship": internship_payload(a.internship),
+            }
+            for a in rows
+        ]
+    }
 
 
 class StageIn(BaseModel):
-    status: str
-    interview_date: date | None = None
-    notes: str = ""
+    stage: str
 
 
-@router.post("/applications/{aid}/stage")
-def set_stage(aid: int, data: StageIn, user: User = Depends(company_only), db: Session = Depends(get_db)):
-    a = db.get(Application, aid)
-    if a is None or a.internship_id not in _my_internship_ids(db, user.id):
-        raise HTTPException(404, "Application not found")
-    if data.status not in STAGES:
-        raise HTTPException(400, "Invalid status")
-    a.status = data.status
-    a.interview_date = data.interview_date or a.interview_date
-    a.notes = data.notes or a.notes
+@router.post("/company/applications/{app_id}/stage")
+def move_stage(app_id: int, data: StageIn, user: User = Depends(require_company), db: Session = Depends(get_db)):
+    a = db.query(Application).filter(Application.id == app_id).first()
+    if not a or a.internship.company_id != _company(db, user).id:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if data.stage not in APPLICATION_STAGES + ["rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid stage")
+    a.status = data.stage
+    hist = json.loads(a.stage_history) if a.stage_history else []
+    hist.append({"stage": data.stage, "at": datetime.utcnow().isoformat()})
+    a.stage_history = json.dumps(hist)
     db.commit()
-    notify(db, a.student_id, f"Application update: {data.status}",
-           f"Your application for '{a.internship.title if a.internship else ''}' is now {data.status}"
-           + (f". Interview on {data.interview_date}" if data.interview_date else ""), "application")
-    db.commit()
-    log_activity(db, user.id, "company.application_stage", f"app {aid} -> {data.status}")
-    db.commit()
+    student = db.query(User).filter(User.id == a.student_id).first()
+    label = data.stage.replace("_", " ")
+    if data.stage == "rejected":
+        notify(db, a.student_id, "Application status update", f"Your application for {a.internship.title} was rejected. Keep applying!", "warning")
+    else:
+        notify(db, a.student_id, f"Moved to {label}", f"Your application for {a.internship.title} moved to '{label}'.", "success" if data.stage in ("selected", "joined") else "info")
+    log_action(db, user, "application_stage", f"{student.name} → {data.stage} for {a.internship.title}")
     return {"ok": True}
 
 
-@router.get("/interns")
-def interns(user: User = Depends(company_only), db: Session = Depends(get_db)):
-    iids = _my_internship_ids(db, user.id)
-    rows = db.query(Enrollment).filter(Enrollment.internship_id.in_(iids)).order_by(Enrollment.created_at.desc()).all() if iids else []
-    out = []
-    for e in rows:
-        student = db.get(User, e.student_id)
-        att = db.query(Attendance).filter_by(student_id=e.student_id).all()
-        present = sum(1 for a in att if a.status == "present")
-        reports = db.query(DailyReport).filter_by(student_id=e.student_id).count()
-        out.append({"id": e.id, "student_id": e.student_id, "name": student.name, "email": student.email,
-                    "role": e.role, "company": e.company_name, "start_date": e.start_date.isoformat() if e.start_date else None,
-                    "end_date": e.end_date.isoformat() if e.end_date else None, "mentor": e.mentor,
-                    "status": e.status, "attendance_pct": round(present / max(len(att), 1) * 100),
-                    "reports": reports, "feedback": [f.comment for f in db.query(InternFeedback).filter_by(enrollment_id=e.id).all()]})
-    return {"items": out}
+# ---------------------------------------------------------------------------
+# Intern monitor
+# ---------------------------------------------------------------------------
+@router.get("/company/interns")
+def interns(user: User = Depends(require_company), db: Session = Depends(get_db)):
+    ids = _own_internship_ids(db, user)
+    joined = (
+        db.query(Application)
+        .filter(Application.internship_id.in_(ids), Application.status == "joined")
+        .all()
+        if ids
+        else []
+    )
+    items = []
+    today = date.today()
+    for a in joined:
+        student = a.student
+        tracker = (
+            db.query(Tracker)
+            .filter(Tracker.student_id == student.id, Tracker.status == "active")
+            .first()
+        )
+        # attendance over last 30 days
+        from datetime import timedelta
+
+        start = today - timedelta(days=29)
+        att = (
+            db.query(Attendance)
+            .filter(Attendance.student_id == student.id, Attendance.day >= start)
+            .all()
+        )
+        pct = round(sum(1 for r in att if r.status == "present") / len(att) * 100) if att else 0
+        reports_ok = (
+            db.query(ReportDaily)
+            .filter(ReportDaily.student_id == student.id, ReportDaily.status == "approved")
+            .count()
+        )
+        fb = (
+            db.query(Feedback)
+            .filter(Feedback.company_id == user.id, Feedback.intern_id == student.id)
+            .order_by(Feedback.created_at.desc())
+            .first()
+        )
+        items.append(
+            {
+                "application_id": a.id,
+                "student": public_user(student),
+                "internship": a.internship.title,
+                "tracker_company": tracker.company if tracker else a.internship.company.name,
+                "attendance_pct": pct,
+                "approved_reports": reports_ok,
+                "streak": student.streak or 0,
+                "feedback": {"rating": fb.rating, "comment": fb.comment} if fb else None,
+            }
+        )
+    return {"items": items}
 
 
 class FeedbackIn(BaseModel):
-    rating: int = 5
+    rating: int = Field(ge=1, le=5)
     comment: str = ""
 
 
-@router.post("/interns/{eid}/feedback")
-def add_feedback(eid: int, data: FeedbackIn, user: User = Depends(company_only), db: Session = Depends(get_db)):
-    e = db.get(Enrollment, eid)
-    if e is None:
-        raise HTTPException(404, "Intern not found")
-    db.add(InternFeedback(company_id=user.id, enrollment_id=eid, rating=data.rating, comment=data.comment))
+@router.post("/company/interns/{student_id}/feedback")
+def give_feedback(student_id: int, data: FeedbackIn, user: User = Depends(require_company), db: Session = Depends(get_db)):
+    ids = _own_internship_ids(db, user)
+    is_intern = (
+        db.query(Application)
+        .filter(
+            Application.internship_id.in_(ids),
+            Application.student_id == student_id,
+            Application.status.in_(["joined", "completed"]),
+        )
+        .first()
+        if ids
+        else None
+    )
+    if not is_intern:
+        raise HTTPException(status_code=403, detail="This student is not your intern")
+    fb = Feedback(company_id=user.id, intern_id=student_id, rating=data.rating, comment=data.comment or None)
+    db.add(fb)
     db.commit()
-    notify(db, e.student_id, "Feedback received", f"Your mentor at {e.company_name} left feedback: {data.comment[:120]}", "feedback")
-    db.commit()
-    return {"ok": True}
-
-
-@router.post("/interns/{eid}/complete")
-def complete_intern(eid: int, user: User = Depends(company_only), db: Session = Depends(get_db)):
-    e = db.get(Enrollment, eid)
-    if e is None:
-        raise HTTPException(404, "Intern not found")
-    e.status = "completed"
-    db.commit()
-    notify(db, e.student_id, "Internship completed 🎉", f"{e.company_name} marked your internship as completed.", "success")
-    db.commit()
-    log_activity(db, user.id, "company.complete_intern", f"enrollment {eid}")
-    db.commit()
+    notify(db, student_id, "Company feedback", f"Your mentor at {user.company_name} rated your performance {data.rating}/5.", "info")
+    log_action(db, user, "feedback", f"Feedback for intern #{student_id}")
     return {"ok": True}

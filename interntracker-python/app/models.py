@@ -1,266 +1,332 @@
-"""SQLAlchemy models for InternTracker."""
-from datetime import datetime, date
+"""SQLAlchemy models for InternTracker.
+
+Tables:
+    users, student_profiles, companies, internships, applications,
+    saved_internships, trackers, reports_daily, reports_weekly,
+    attendance, notifications, announcements, certificates, rewards,
+    reward_config, feedback, activity_log, mentors
+"""
+from datetime import date, datetime
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.types import JSON
 
 from .database import Base
 
-ROLES = ("student", "faculty", "admin", "company")
+
+def now():
+    return datetime.utcnow()
 
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    name = Column(String(120), nullable=False)
-    email = Column(String(160), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
-    role = Column(String(20), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
-    student_profile = relationship("StudentProfile", back_populates="user", uselist=False,
-                                  foreign_keys="StudentProfile.user_id")
-    faculty_profile = relationship("FacultyProfile", back_populates="user", uselist=False)
-    company_profile = relationship("CompanyProfile", back_populates="user", uselist=False)
+    id = Column(Integer, primary_key=True)
+    role = Column(String(20), nullable=False, index=True)  # student|faculty|admin|company
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
+    avatar = Column(String(20), default="U")
+    created_at = Column(DateTime, default=now)
+
+    # company-specific
+    company_name = Column(String(255))
+    company_website = Column(String(255))
+    company_industry = Column(String(120))
+    company_description = Column(Text)
+    verified = Column(Boolean, default=False)  # verified company badge
+    verification_status = Column(String(20), default="pending")  # pending|verified|rejected
+    verification_note = Column(Text)
+
+    # faculty-specific
+    faculty_department = Column(String(120))
+    faculty_designation = Column(String(120))
+
+    # student-specific (also mirrored in student_profiles for richer data)
+    department = Column(String(120))
+    branch = Column(String(120))
+    year = Column(String(30))
+    cgpa = Column(Float)
+    phone = Column(String(30))
+    location = Column(String(120))
+    resume_path = Column(String(255))
+    points = Column(Integer, default=0)
+    streak = Column(Integer, default=0)
+    last_active_date = Column(Date)
+
+    profile_completed = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    mentor_id = Column(Integer, ForeignKey("users.id"))
+
+    student_profile = relationship("StudentProfile", uselist=False, back_populates="user", cascade="all, delete-orphan")
+    company = relationship(
+        "Company", uselist=False, back_populates="user",
+        foreign_keys="Company.user_id", cascade="all, delete-orphan",
+    )
+    mentor = relationship("User", remote_side=[id], foreign_keys=[mentor_id])
 
 
 class StudentProfile(Base):
     __tablename__ = "student_profiles"
-    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    college = Column(String(160), default="")
-    department = Column(String(120), default="")
-    branch = Column(String(120), default="")
-    year = Column(String(20), default="1")
-    semester = Column(String(20), default="1")
-    cgpa = Column(Float, default=0.0)
-    skills = Column(JSON, default=list)
-    bio = Column(Text, default="")
-    photo_url = Column(String(300), default="")
-    resume_url = Column(String(300), default="")
-    mentor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    points = Column(Integer, default=0)
-    badges = Column(JSON, default=list)
-    current_streak = Column(Integer, default=0)
-    longest_streak = Column(Integer, default=0)
-    last_report_date = Column(Date, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    user = relationship("User", back_populates="student_profile", foreign_keys=[user_id])
-    mentor = relationship("User", foreign_keys=[mentor_id])
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    department = Column(String(120))
+    branch = Column(String(120))
+    year = Column(String(30))
+    cgpa = Column(Float)
+    phone = Column(String(30))
+    location = Column(String(120))
+    skills = Column(Text)  # comma separated
+    bio = Column(Text)
+    linkedin = Column(String(255))
+    github = Column(String(255))
+    resume_path = Column(String(255))
+
+    user = relationship("User", back_populates="student_profile")
 
 
-class FacultyProfile(Base):
-    __tablename__ = "faculty_profiles"
-    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    department = Column(String(120), default="")
-    designation = Column(String(120), default="Assistant Professor")
+class Company(Base):
+    __tablename__ = "companies"
 
-    user = relationship("User", back_populates="faculty_profile")
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    website = Column(String(255))
+    industry = Column(String(120))
+    description = Column(Text)
+    logo = Column(String(255))
+    location = Column(String(120))
+    status = Column(String(20), default="pending")  # pending|verified|rejected
+    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    reviewed_at = Column(DateTime)
+    docs = Column(String(255))
+    created_at = Column(DateTime, default=now)
 
-
-class CompanyProfile(Base):
-    __tablename__ = "company_profiles"
-    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    name = Column(String(160), nullable=False)
-    official_email = Column(String(160), default="")
-    website = Column(String(200), default="")
-    industry = Column(String(120), default="")
-    location = Column(String(160), default="")
-    description = Column(Text, default="")
-    registration_info = Column(String(300), default="")
-    docs = Column(JSON, default=list)
-    logo_url = Column(String(300), default="")
-    verification_status = Column(String(20), default="pending")  # pending|verified|rejected|suspended
-    verified_at = Column(DateTime, nullable=True)
-    verified_by = Column(Integer, nullable=True)
-
-    user = relationship("User", back_populates="company_profile")
+    user = relationship("User", back_populates="company", foreign_keys=[user_id])
+    internships = relationship("Internship", back_populates="company")
 
 
 class Internship(Base):
     __tablename__ = "internships"
-    id = Column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    title = Column(String(200), nullable=False)
-    description = Column(Text, default="")
-    mode = Column(String(20), default="remote")  # remote|onsite|hybrid
-    location = Column(String(160), default="")
-    paid = Column(Boolean, default=True)
-    stipend = Column(String(80), default="")
-    duration = Column(String(60), default="3 months")
-    domain = Column(String(120), default="")
-    skills = Column(JSON, default=list)
-    intern_type = Column(String(20), default="fulltime")  # fulltime|parttime|summer|wfh
-    deadline = Column(Date, nullable=True)
-    status = Column(String(20), default="open", index=True)  # open|closed
-    posted_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(Integer, nullable=True)
 
-    company = relationship("User", foreign_keys=[company_id])
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text)
+    domain = Column(String(120), index=True)
+    location = Column(String(120))
+    latitude = Column(Float)
+    longitude = Column(Float)
+    mode = Column(String(30), default="remote")  # remote|onsite|hybrid|wfh
+    duration_months = Column(Integer, default=3)
+    stipend = Column(String(120), default="Unpaid")
+    paid = Column(Boolean, default=False)
+    skills = Column(Text)  # comma separated
+    seats = Column(Integer, default=1)
+    deadline = Column(Date)
+    status = Column(String(20), default="open")  # open|closed
+    posted_at = Column(DateTime, default=now)
+
+    company = relationship("Company", back_populates="internships")
+    applications = relationship("Application", back_populates="internship", cascade="all, delete-orphan")
 
 
 class Application(Base):
     __tablename__ = "applications"
     __table_args__ = (UniqueConstraint("student_id", "internship_id", name="uq_app_student_internship"),)
+
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     internship_id = Column(Integer, ForeignKey("internships.id"), nullable=False, index=True)
-    status = Column(String(20), default="applied", index=True)
-    # applied|under_review|shortlisted|interview|selected|rejected|joined|completed
-    interview_date = Column(Date, nullable=True)
-    notes = Column(Text, default="")
-    applied_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String(30), default="applied", index=True)
+    applied_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+    cover_letter = Column(Text)
+    stage_history = Column(Text)  # JSON array of {stage, at}
 
-    internship = relationship("Internship")
-
-
-class Enrollment(Base):
-    """A student's active/completed internship tracking workspace."""
-    __tablename__ = "enrollments"
-    id = Column(Integer, primary_key=True)
-    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    internship_id = Column(Integer, ForeignKey("internships.id"), nullable=True)
-    company_name = Column(String(160), default="")
-    role = Column(String(160), default="")
-    start_date = Column(Date, nullable=True)
-    end_date = Column(Date, nullable=True)
-    mentor = Column(String(160), default="")
-    mode = Column(String(20), default="remote")
-    location = Column(String(160), default="")
-    intern_type = Column(String(30), default="off_campus")  # on_campus|off_campus|college_provided|self_found
-    status = Column(String(20), default="active")  # active|completed
-    offer_letter_url = Column(String(300), default="")
-    certificate_url = Column(String(300), default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    internship = relationship("Internship")
-
-
-class Attendance(Base):
-    __tablename__ = "attendance"
-    __table_args__ = (UniqueConstraint("student_id", "date", name="uq_attendance_student_date"),)
-    id = Column(Integer, primary_key=True)
-    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    enrollment_id = Column(Integer, ForeignKey("enrollments.id"), nullable=True)
-    date = Column(Date, nullable=False)
-    status = Column(String(20), default="present")  # present|absent|leave|holiday|pending
-    check_in = Column(String(10), default="")
-    check_out = Column(String(10), default="")
-    hours = Column(Float, default=0.0)
-    summary = Column(Text, default="")
-    tasks = Column(JSON, default=list)
-    verified = Column(Boolean, default=False)
-
-
-class DailyReport(Base):
-    __tablename__ = "daily_reports"
-    __table_args__ = (UniqueConstraint("student_id", "date", name="uq_daily_student_date"),)
-    id = Column(Integer, primary_key=True)
-    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    date = Column(Date, nullable=False)
-    tasks = Column(Text, default="")
-    learned = Column(Text, default="")
-    problems = Column(Text, default="")
-    plan = Column(Text, default="")
-    hours = Column(Float, default=0.0)
-    status = Column(String(20), default="pending")  # pending|approved|rejected
-    feedback = Column(Text, default="")
-    reviewed_by = Column(Integer, nullable=True)
-    submitted_at = Column(DateTime, default=datetime.utcnow)
-
-
-class WeeklyReport(Base):
-    __tablename__ = "weekly_reports"
-    __table_args__ = (UniqueConstraint("student_id", "week_start", name="uq_weekly_student_week"),)
-    id = Column(Integer, primary_key=True)
-    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    week_start = Column(Date, nullable=False)
-    total_days = Column(Integer, default=0)
-    attendance_pct = Column(Float, default=0.0)
-    total_hours = Column(Float, default=0.0)
-    tasks = Column(Text, default="")
-    skills = Column(Text, default="")
-    problems = Column(Text, default="")
-    progress = Column(Integer, default=0)  # 0-100
-    status = Column(String(20), default="pending")
-    feedback = Column(Text, default="")
-    submitted_at = Column(DateTime, default=datetime.utcnow)
-
-
-class Notification(Base):
-    __tablename__ = "notifications"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    title = Column(String(200), default="")
-    body = Column(Text, default="")
-    ntype = Column(String(40), default="info")
-    read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class Certificate(Base):
-    __tablename__ = "certificates"
-    id = Column(Integer, primary_key=True)
-    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    title = Column(String(200), default="")
-    cert_type = Column(String(60), default="internship")  # internship|offer|completion|experience
-    file_url = Column(String(300), default="")
-    company_name = Column(String(160), default="")
-    notes = Column(Text, default="")
-    score = Column(Integer, default=50)  # 0-100 authenticity score
-    status = Column(String(20), default="review")  # verified|review|suspicious
-    indicators = Column(JSON, default=list)
-    reviewed_by = Column(Integer, nullable=True)
-    reviewed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    student = relationship("User", foreign_keys=[student_id])
+    internship = relationship("Internship", back_populates="applications")
 
 
 class SavedInternship(Base):
     __tablename__ = "saved_internships"
     __table_args__ = (UniqueConstraint("student_id", "internship_id", name="uq_saved_student_internship"),)
+
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    internship_id = Column(Integer, ForeignKey("internships.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    internship_id = Column(Integer, ForeignKey("internships.id"), nullable=False)
+    saved_at = Column(DateTime, default=now)
 
-    internship = relationship("Internship")
+    internship = relationship("Internship", foreign_keys=[internship_id])
+
+
+class Tracker(Base):
+    __tablename__ = "trackers"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    internship_id = Column(Integer, ForeignKey("internships.id"))  # optional
+    type = Column(String(30), default="self-found")  # on-campus|off-campus|college-provided|self-found
+
+    internship = relationship("Internship", foreign_keys=[internship_id])
+    company = Column(String(255), nullable=False)
+    role = Column(String(255), nullable=False)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    mentor_name = Column(String(255))
+    mentor_email = Column(String(255))
+    mode = Column(String(30), default="onsite")
+    location = Column(String(120))
+    offer_letter_path = Column(String(255))
+    status = Column(String(20), default="active")  # active|completed
+    created_at = Column(DateTime, default=now)
+
+
+class ReportDaily(Base):
+    __tablename__ = "reports_daily"
+    __table_args__ = (UniqueConstraint("student_id", "report_date", name="uq_report_daily"),)
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    report_date = Column(Date, default=date.today)
+    content = Column(Text, nullable=False)
+    hours = Column(Float, default=0)
+    status = Column(String(20), default="pending")  # pending|approved|rejected
+    feedback = Column(Text)
+    points = Column(Integer, default=0)
+    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=now)
+
+
+class ReportWeekly(Base):
+    __tablename__ = "reports_weekly"
+    __table_args__ = (UniqueConstraint("student_id", "week_label", name="uq_report_weekly"),)
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    week_label = Column(String(30), nullable=False)  # e.g. 2026-W33
+    content = Column(Text, nullable=False)
+    highlights = Column(Text)
+    status = Column(String(20), default="pending")
+    feedback = Column(Text)
+    points = Column(Integer, default=0)
+    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=now)
+
+
+class Attendance(Base):
+    __tablename__ = "attendance"
+    __table_args__ = (UniqueConstraint("student_id", "day", name="uq_attendance_day"),)
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    day = Column(Date, default=date.today)
+    check_in = Column(DateTime)
+    check_out = Column(DateTime)
+    hours = Column(Float, default=0)
+    status = Column(String(20), default="present")  # present|absent
+    note = Column(Text)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    message = Column(Text)
+    type = Column(String(30), default="info")  # info|success|warning|danger|system
+    read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=now)
 
 
 class Announcement(Base):
     __tablename__ = "announcements"
+
     id = Column(Integer, primary_key=True)
-    title = Column(String(200), nullable=False)
-    body = Column(Text, default="")
-    created_by = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    audience = Column(String(30), default="all")  # all|students|faculty|companies
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=now)
 
 
-class RewardLog(Base):
-    __tablename__ = "reward_logs"
+class Certificate(Base):
+    __tablename__ = "certificates"
+
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tracker_id = Column(Integer, ForeignKey("trackers.id"))
+    code = Column(String(64), unique=True, nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    company = Column(String(255))
+    issued_by = Column(String(255))
+    status = Column(String(20), default="pending")  # pending|approved|rejected
+    authenticity_score = Column(Integer, default=0)
+    doc_path = Column(String(255))
+    review_note = Column(Text)
+    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=now)
+
+
+class Reward(Base):
+    __tablename__ = "rewards"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    badge = Column(String(120))
+    reason = Column(String(255), nullable=False)
     points = Column(Integer, default=0)
-    reason = Column(String(200), default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now)
 
 
-class InternFeedback(Base):
-    __tablename__ = "intern_feedback"
+class RewardConfig(Base):
+    __tablename__ = "reward_config"
+
+    key = Column(String(60), primary_key=True)
+    label = Column(String(120), nullable=False)
+    value = Column(Integer, nullable=False)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+
     id = Column(Integer, primary_key=True)
     company_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    enrollment_id = Column(Integer, ForeignKey("enrollments.id"), nullable=False)
-    rating = Column(Integer, default=0)  # 1-5
-    comment = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    intern_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    rating = Column(Integer, default=5)
+    comment = Column(Text)
+    created_at = Column(DateTime, default=now)
 
 
 class ActivityLog(Base):
-    __tablename__ = "activity_logs"
+    __tablename__ = "activity_log"
+
     id = Column(Integer, primary_key=True)
-    actor_id = Column(Integer, nullable=True, index=True)
-    action = Column(String(120), default="")
-    detail = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    actor_name = Column(String(255))
+    action = Column(String(120), nullable=False)
+    details = Column(Text)
+    created_at = Column(DateTime, default=now)
+
+
+class Mentor(Base):
+    __tablename__ = "mentors"
+    __table_args__ = (UniqueConstraint("student_id", "faculty_id", name="uq_mentor_pair"),)
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    faculty_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assigned_at = Column(DateTime, default=now)

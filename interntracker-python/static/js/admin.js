@@ -1,367 +1,478 @@
-/* ================= T&P Cell / Admin workspace ================= */
-async function aview(c, fn) {
-  c.innerHTML = "";
-  c.append(spinner());
-  try { c.replaceChildren(await fn()); }
-  catch (e) { c.replaceChildren(emptyState(e.message, "⚠️")); }
-}
+/* InternTracker — T&P Cell (admin) workspace */
 
-function acard(title, body, headRight) {
-  return h("div", { class: "card" },
-    h("div", { class: "card-head" }, h("h3", title), headRight || null), body);
-}
-
-/* ---------------- dashboard ---------------- */
-function adminDashboard(d) {
+/* ============================== DASHBOARD ============================== */
+App.pages.dashboard = async function (content) {
+  const d = await API.get("/api/admin/dashboard");
   const s = d.stats;
-  const stats = h("div", { class: "grid grid-4" },
-    stat("Students", s.students, s.students_at_risk + " at risk", "accent", "users"),
-    stat("Companies", s.companies, s.verified_companies + " verified", "emerald", "building"),
-    stat("Pending verification", s.pending_verification, "Queue to review", "amber", "shield"),
-    stat("Applications", s.applications, s.open_internships + " open internships", "sky", "briefcase"),
-    stat("Active internships", s.active_internships, s.completed_internships + " completed", "emerald", "flame"),
-    stat("Certificates to review", s.certificates_pending, null, "rose", "qr"),
-    stat("Reports today", s.reports_today, null, "violet", "file"),
-    stat("Attendance", s.attendance_pct + "%", "College-wide", "sky", "calendar"));
+  content.innerHTML = `
+    <div class="role-banner admin fade-in">
+      <div class="rb-icon">${UI.icons.shield}</div>
+      <div>
+        <h2>T&amp;P Cell Dashboard</h2>
+        <p>College-wide internship operations · ${s.attendance_today} students checked in today</p>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-family:var(--display);font-size:26px;font-weight:800">${s.pending_companies + s.pending_certificates}</div>
+        <div style="font-size:11.5px;opacity:.85">items awaiting review</div>
+      </div>
+    </div>
 
-  const bars = h("div", { class: "flex-col" },
-    (d.applications_by_status || []).map((x) =>
-      h("div", { class: "flex", style: "gap:10px" },
-        h("span", { style: "width:110px;font-size:12.5px;color:var(--ink-2)" }, x.status.replace(/_/g, " ")),
-        h("div", { class: "grow" }, progressBar(Math.min(100, (x.count / Math.max(1, Math.max(...d.applications_by_status.map((y) => y.count)))) * 100))),
-        h("b", { style: "width:28px;text-align:right" }, x.count))));
+    <div class="grid grid-4 mb-16">
+      <div class="stat"><div class="stat-icon blue">${UI.icons.students}</div><div><div class="stat-value">${s.students}</div><div class="stat-label">Students</div></div></div>
+      <div class="stat"><div class="stat-icon violet">${UI.icons.students}</div><div><div class="stat-value">${s.faculty}</div><div class="stat-label">Faculty</div></div></div>
+      <div class="stat"><div class="stat-icon amber">${UI.icons.companies}</div><div><div class="stat-value">${s.companies}</div><div class="stat-label">Companies · ${s.verified_companies} verified</div></div></div>
+      <div class="stat"><div class="stat-icon green">${UI.icons.explorer}</div><div><div class="stat-value">${s.internships}</div><div class="stat-label">Open internships</div></div></div>
+    </div>
+    <div class="grid grid-4 mb-16">
+      <div class="stat"><div class="stat-icon teal">${UI.icons.applications}</div><div><div class="stat-value">${s.applications}</div><div class="stat-label">Applications</div></div></div>
+      <div class="stat"><div class="stat-icon blue">${UI.icons.tracker}</div><div><div class="stat-value">${s.active_trackers}</div><div class="stat-label">Active trackers</div></div></div>
+      <div class="stat"><div class="stat-icon rose">${UI.icons.shield}</div><div><div class="stat-value">${s.pending_companies}</div><div class="stat-label">Companies to verify</div></div></div>
+      <div class="stat"><div class="stat-icon amber">${UI.icons.certificates}</div><div><div class="stat-value">${s.pending_certificates}</div><div class="stat-label">Certificates to review</div></div></div>
+    </div>
 
-  const actItems = (d.recent_activity || []).map((l) => {
-    const body = h("div", { class: "grow" },
-      h("b", l.action.replace(/\./g, " ")),
-      h("div", { class: "muted" }, l.detail),
-      h("time", { class: "muted", style: "font-size:11px" }, fmtDateTime(l.created_at)));
-    return h("div", { class: "list-item" }, h("div", { class: "avatar" }, "•"), body);
-  });
-  const activity = h("div", { class: "flex-col" }, actItems);
-
-  return h("div", { class: "stack" },
-    h("div", { class: "alert sky" }, icon("megaphone"),
-      h("div", { class: "grow" }, h("b", "Welcome back, T&P Cell"), "Here's what's happening with internships across the college today."),
-      h("a", { class: "btn btn-sm btn-soft", href: "#/announcements" }, "Announce")),
-    stats,
-    h("div", { class: "grid grid-2-1" },
-      acard("Applications by stage", bars),
-      acard("Recent activity", activity.length ? activity : emptyState("No activity yet", "🕒"))));
-}
-
-/* ---------------- students ---------------- */
-function adminStudents(d, c) {
-  const q = h("input", { class: "input", placeholder: "Search students…" });
-  const refresh = () => aview(c, async () => adminStudents(await API.get("/admin/students?q=" + encodeURIComponent(q.value)), c));
-  q.addEventListener("keydown", (e) => { if (e.key === "Enter") refresh(); });
-  return h("div", { class: "stack" },
-    h("div", { class: "toolbar" }, h("div", { class: "grow" }, q), h("span", { class: "muted" }, d.items.length + " students")),
-    acard("All students", h("div", { class: "table-wrap" },
-      h("table", { class: "table" },
-        h("thead", h("tr", ["Student", "Dept / Year", "CGPA", "Streak", "Points", "Internship", "Mentor", ""].map((x) => h("th", x)))),
-        h("tbody", d.items.map((st) => h("tr",
-          h("td", h("div", { class: "flex", style: "gap:10px" }, h("div", { class: "avatar" }, initials(st.name)), h("div", {}, h("div", { class: "cell-main" }, st.name), h("div", { class: "cell-sub" }, st.email)))),
-          h("td", (st.branch || st.department) + " · Y" + st.year),
-          h("td", st.cgpa || "—"),
-          h("td", "🔥 " + st.streak),
-          h("td", st.points),
-          h("td", st.active_internship || h("span", { class: "muted" }, "—")),
-          h("td", st.mentor || h("span", { class: "muted" }, "None")),
-          h("td", h("button", { class: "btn btn-sm btn-ghost", onclick: () => mentorModal(st, refresh) }, "Assign mentor")))))))));
-}
-
-async function mentorModal(st, onDone) {
-  let faculty = { items: [] };
-  try { faculty = await API.get("/admin/faculty"); } catch (e) { /* ignore */ }
-  const sel = h("select", { class: "select" });
-  sel.append(h("option", { value: "" }, "— No mentor —"));
-  faculty.items.forEach((f) => sel.append(h("option", { value: f.id, selected: st.mentor_id === f.id }, f.name + " (" + f.students + " students)")));
-  const m = modal("Assign mentor — " + st.name, h("div", { class: "flex-col" },
-    h("div", { class: "field" }, h("label", "Faculty mentor"), sel),
-    h("div", { class: "actions" },
-      h("button", { class: "btn btn-ghost", onclick: () => m.close() }, "Cancel"),
-      h("button", { class: "btn btn-primary", onclick: async () => {
-        try { await API.patch("/admin/students/" + st.id + "/mentor", { mentor_id: sel.value ? parseInt(sel.value, 10) : null }); toast("Mentor updated", "success"); m.close(); onDone(); }
-        catch (e) { toast(e.message, "error"); }
-      } }, "Save"))));
-}
-
-/* ---------------- faculty ---------------- */
-function adminFaculty(d) {
-  return acard("Faculty & mentors", h("div", { class: "table-wrap" },
-    h("table", { class: "table" },
-      h("thead", h("tr", ["Name", "Email", "Assigned students"].map((x) => h("th", x)))),
-      h("tbody", d.items.map((f) => h("tr",
-        h("td", h("div", { class: "flex", style: "gap:10px" }, h("div", { class: "avatar" }, initials(f.name)), h("div", { class: "cell-main" }, f.name))),
-        h("td", { class: "cell-sub" }, f.email),
-        h("td", h("span", { class: "badge b-accent", style: "background:var(--accent-soft);color:var(--accent-strong)" }, f.students + " students"))))))));
-}
-
-/* ---------------- companies ---------------- */
-function adminCompanies(d, c, opts) {
-  opts = opts || {};
-  const status = h("select", { class: "select" });
-  [["", "All statuses"], ["pending", "Pending"], ["verified", "Verified"], ["rejected", "Rejected"], ["suspended", "Suspended"]].forEach(([v, l]) => status.append(h("option", { value: v }, l)));
-  status.value = opts.status || "";
-  const refresh = () => aview(c, async () => adminCompanies(await API.get("/admin/companies" + (status.value ? "?status=" + status.value : "")), c, { status: status.value }));
-  status.addEventListener("change", refresh);
-  const coRows = (d.items || []).map((co) => {
-    const btn = (label, cls, action) => h("button", { class: "btn btn-sm " + cls, onclick: () => verify(co.id, action, refresh) }, label);
-    const actions = h("div", { class: "flex", style: "gap:6px" },
-      co.verification_status !== "verified" ? btn("Verify", "btn-success", "verify") : null,
-      co.verification_status !== "rejected" ? btn("Reject", "btn-danger", "reject") : null,
-      co.verification_status !== "suspended" ? btn("Suspend", "btn-ghost", "suspend") : null);
-    const info = h("div", { class: "grow" },
-      h("b", co.name),
-      h("div", { class: "muted" }, co.industry + " · " + (co.location || "—") + " · " + co.internships + " internships"),
-      h("div", { class: "muted", style: "font-size:11.5px" }, co.official_email + (co.website ? " · " + co.website : "")));
-    return h("div", { class: "list-item" },
-      h("div", { class: "avatar" }, initials(co.name)),
-      info,
-      statusBadge(co.verification_status),
-      actions);
-  });
-  return h("div", { class: "stack" },
-    h("div", { class: "toolbar" }, h("b", { class: "grow" }, "Company registry"), status),
-    h("div", { class: "flex-col" }, coRows));
-  async function verify(cid, action, onDone) {
-    if (action !== "verify" && !confirm("Set this company to '" + action + "'?")) return;
-    try { await API.post("/admin/companies/" + cid + "/verify", { action }); toast("Company " + action + "d", "success"); onDone(); }
-    catch (e) { toast(e.message, "error"); }
-  }
-}
-
-/* ---------------- verification queue ---------------- */
-function adminVerification(d, c) {
-  const pending = (d.items || []).filter((x) => x.verification_status === "pending");
-  const refresh = () => aview(c, async () => adminVerification(await API.get("/admin/companies?status=pending"), c));
-  return h("div", { class: "stack" },
-    h("div", { class: "alert amber" }, icon("shield"),
-      h("div", { class: "grow" }, h("b", pending.length + " companies waiting for verification"),
-        "Check registration info and docs, then verify or reject. Verified companies get a badge students trust.")),
-    pending.length ? h("div", { class: "grid grid-2" }, pending.map((co) =>
-      h("div", { class: "card" },
-        h("div", { class: "flex" }, h("div", { class: "avatar lg" }, initials(co.name)), h("div", { class: "grow" },
-          h("b", { style: "font-size:15px" }, co.name), h("div", { class: "muted" }, co.industry + " · " + co.location))),
-        h("div", { class: "divider" }),
-        kv([["Official email", co.official_email], ["Website", co.website ? h("a", { href: co.website, target: "_blank" }, co.website) : "—"],
-          ["Registration", co.registration_info || "—"], ["Description", (co.description || "").slice(0, 120)]]),
-        h("div", { class: "actions", style: "margin-top:14px" },
-          h("button", { class: "btn btn-success", onclick: async () => { await verify(co.id, "verify"); refresh(); } }, icon("check"), "Verify"),
-          h("button", { class: "btn btn-danger", onclick: async () => { await verify(co.id, "reject"); refresh(); } }, icon("x"), "Reject")))))
-      : emptyState("Verification queue is clear 🎉", "✅"));
-  function kv(pairs) { return h("div", { class: "kv" }, pairs.map(([k, v]) => h("div", {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v)))); }
-  async function verify(cid, action) {
-    try { await API.post("/admin/companies/" + cid + "/verify", { action }); toast("Company " + (action === "verify" ? "verified ✓" : "rejected"), "success"); refresh(); }
-    catch (e) { toast(e.message, "error"); }
-  }
-}
-
-/* ---------------- internships ---------------- */
-function adminInternships(d, c) {
-  const status = h("select", { class: "select" });
-  [["", "All"], ["open", "Open"], ["closed", "Closed"]].forEach(([v, l]) => status.append(h("option", { value: v }, l)));
-  const refresh = () => aview(c, async () => adminInternships(await API.get("/admin/internships" + (status.value ? "?status=" + status.value : "")), c));
-  status.addEventListener("change", refresh);
-  return h("div", { class: "stack" },
-    h("div", { class: "toolbar" }, h("b", { class: "grow" }, "All internships"), status),
-    h("div", { class: "card pad-0" }, h("div", { class: "table-wrap" },
-      h("table", { class: "table" },
-        h("thead", h("tr", ["Internship", "Company", "Mode", "Stipend", "Deadline", "Applications", "Status", ""].map((x) => h("th", x)))),
-        h("tbody", d.items.map((i) => h("tr",
-          h("td", { class: "cell-main" }, i.title),
-          h("td", h("div", { class: "flex", style: "gap:6px" }, i.company, i.verified ? h("span", { class: "badge b-verified" }, icon("verified", 11), "Verified") : null)),
-          h("td", i.mode),
-          h("td", i.stipend || "—"),
-          h("td", fmtDate(i.deadline)),
-          h("td", i.applications),
-          h("td", statusBadge(i.status)),
-          h("td", h("button", { class: "btn btn-sm btn-ghost", onclick: async () => {
-            try { await API.post("/admin/internships/" + i.id + "/status", { action: i.status === "open" ? "closed" : "open" }); toast("Updated", "success"); refresh(); }
-            catch (e) { toast(e.message, "error"); }
-          } }, i.status === "open" ? "Close" : "Reopen")))))))));
-}
-
-/* ---------------- applications ---------------- */
-function adminApplications(d, c) {
-  const status = h("select", { class: "select" });
-  [["", "All"], ["applied", "Applied"], ["under_review", "Under review"], ["shortlisted", "Shortlisted"], ["interview", "Interview"],
-   ["selected", "Selected"], ["rejected", "Rejected"], ["joined", "Joined"], ["completed", "Completed"]].forEach(([v, l]) => status.append(h("option", { value: v }, l)));
-  const refresh = () => aview(c, async () => adminApplications(await API.get("/admin/applications" + (status.value ? "?status=" + status.value : "")), c));
-  status.addEventListener("change", refresh);
-  const stage = (a) => {
-    const sel = h("select", { class: "select input-sm", style: "width:auto" });
-    ["applied", "under_review", "shortlisted", "interview", "selected", "rejected", "joined", "completed"].forEach((x) => sel.append(h("option", { value: x }, x.replace(/_/g, " "))));
-    sel.value = a.status;
-    sel.addEventListener("change", async () => {
-      try { await API.post("/admin/applications/" + a.id + "/status", { action: sel.value }); toast("Application updated", "success"); refresh(); }
-      catch (e) { toast(e.message, "error"); }
-    });
-    return sel;
-  };
-  return h("div", { class: "stack" },
-    h("div", { class: "toolbar" }, h("b", { class: "grow" }, "All applications"), status),
-    h("div", { class: "card pad-0" }, h("div", { class: "table-wrap" },
-      h("table", { class: "table" },
-        h("thead", h("tr", ["Student", "Internship", "Company", "Applied", "Status", ""].map((x) => h("th", x)))),
-        h("tbody", d.items.map((a) => h("tr",
-          h("td", { class: "cell-main" }, a.student),
-          h("td", a.title), h("td", a.company || "—"),
-          h("td", { class: "cell-sub" }, fmtDate(a.applied_at)),
-          h("td", statusBadge(a.status)),
-          h("td", stage(a)))))))));
-}
-
-/* ---------------- certificates ---------------- */
-function adminCertificates(d, c) {
-  const status = h("select", { class: "select" });
-  [["", "All"], ["review", "Needs review"], ["verified", "Verified"], ["suspicious", "Suspicious"]].forEach(([v, l]) => status.append(h("option", { value: v }, l)));
-  const refresh = () => aview(c, async () => adminCertificates(await API.get("/admin/certificates" + (status.value ? "?status=" + status.value : "")), c));
-  status.addEventListener("change", refresh);
-  return h("div", { class: "stack" },
-    h("div", { class: "toolbar" }, h("b", { class: "grow" }, "Certificate review queue"), status),
-    h("div", { class: "flex-col" }, (d.items || []).map((cert) =>
-      h("div", { class: "list-item" },
-        h("div", { class: "avatar" }, icon("qr")),
-        h("div", { class: "grow" },
-          h("b", cert.title), h("div", { class: "muted" }, cert.student + " · " + cert.company_name + " · " + fmtDate(cert.created_at)),
-          h("div", { class: "flex", style: "gap:6px;margin-top:5px" },
-            h("span", { class: "badge " + (cert.score >= 70 ? "b-verified" : cert.score >= 40 ? "b-pending" : "b-rejected") }, "AI score " + cert.score + "/100"),
-            (cert.indicators || []).slice(0, 2).map((x) => h("span", { class: "muted", style: "font-size:11px" }, x)))),
-        statusBadge(cert.status),
-        cert.file_url ? h("a", { class: "btn btn-sm btn-ghost", href: cert.file_url, target: "_blank" }, "File") : null,
-        h("button", { class: "btn btn-sm btn-primary", onclick: () => reviewModal(cert, refresh) }, "Review")))));
-  function reviewModal(cert, onDone) {
-    const note = h("input", { class: "input", placeholder: "Note to the student (optional)" });
-    const m = modal("Review certificate", h("div", { class: "flex-col" },
-      h("div", { class: "alert sky" }, h("div", {}, h("b", cert.title), h("span", { class: "muted" }, " by " + cert.student + " at " + cert.company_name))),
-      h("div", { class: "field" }, h("label", "Note"), note),
-      h("div", { class: "actions" },
-        h("button", { class: "btn btn-danger", onclick: () => act("suspicious") }, "Flag suspicious"),
-        h("button", { class: "btn btn-ghost", onclick: () => act("review") }, "Keep in review"),
-        h("button", { class: "btn btn-success", onclick: () => act("verified") }, icon("check"), "Verify"))));
-    async function act(st) {
-      try { await API.post("/admin/certificates/" + cert.id + "/review", { status: st, note: note.value }); toast("Certificate marked " + st, "success"); m.close(); onDone(); }
-      catch (e) { toast(e.message, "error"); }
-    }
-  }
-}
-
-/* ---------------- rankings ---------------- */
-function adminRankings(d) {
-  const medal = (rank) => rank === 1 ? "gold" : rank === 2 ? "silver" : rank === 3 ? "bronze" : "plain";
-  return h("div", { class: "card pad-0" }, h("div", { class: "table-wrap" },
-    h("table", { class: "table" },
-      h("thead", h("tr", ["Rank", "Student", "Department", "Year", "Points", "Streak", "CGPA", "Badges"].map((x) => h("th", x)))),
-      h("tbody", d.items.map((r) => h("tr",
-        h("td", h("span", { class: "medal " + medal(r.rank) }, r.rank)),
-        h("td", { class: "cell-main" }, r.name),
-        h("td", r.department + (r.branch ? " · " + r.branch : "")),
-        h("td", r.year),
-        h("td", h("b", r.points)),
-        h("td", "🔥 " + r.streak),
-        h("td", r.cgpa || "—"),
-        h("td", r.badges)))))));
-}
-
-/* ---------------- rewards ---------------- */
-function adminRewards() {
-  const form = h("form", { class: "card", style: "max-width:520px", onsubmit: (e) => { e.preventDefault(); save(); return false; } },
-    h("div", { class: "card-head" }, h("h3", "Reward points configuration")),
-    h("p", { class: "muted mb" }, "Points are awarded automatically when students complete these actions. Changes take effect immediately."),
-    h("div", { class: "row-2" },
-      h("div", { class: "field" }, h("label", "Daily report"), h("input", { class: "input", id: "rw-daily", type: "number", value: "10" })),
-      h("div", { class: "field" }, h("label", "Weekly summary"), h("input", { class: "input", id: "rw-weekly", type: "number", value: "50" }))),
-    h("div", { class: "row-2" },
-      h("div", { class: "field" }, h("label", "Perfect week"), h("input", { class: "input", id: "rw-perfect", type: "number", value: "100" })),
-      h("div", { class: "field" }, h("label", "Internship completion"), h("input", { class: "input", id: "rw-complete", type: "number", value: "500" }))),
-    h("div", { class: "actions" }, h("button", { class: "btn btn-primary", type: "submit" }, "Save configuration")));
-  async function save() {
-    try {
-      const res = await API.patch("/admin/rewards", {
-        daily: parseInt(document.getElementById("rw-daily").value) || 10,
-        weekly: parseInt(document.getElementById("rw-weekly").value) || 50,
-        perfect_week: parseInt(document.getElementById("rw-perfect").value) || 100,
-        completion: parseInt(document.getElementById("rw-complete").value) || 500,
-      });
-      toast("Rewards configuration saved", "success");
-    } catch (e) { toast(e.message, "error"); }
-  }
-  return form;
-}
-
-/* ---------------- analytics ---------------- */
-function adminAnalytics(d) {
-  const deptRows = Object.entries(d.departments || {});
-  const deptLabels = deptRows.map(([name]) => name);
-  const studentsPerDept = deptRows.map(([, v]) => v.students);
-  const internsPerDept = deptRows.map(([, v]) => v.interns);
-  const weekLabels = (d.weeks || []).map((w) => fmtDate(w.week).slice(0, 6));
-  const att = d.attendance || {};
-  const attTotal = att.present + att.absent + att.leave + att.holiday || 1;
-  const attPct = Math.round((att.present / attTotal) * 100);
-  return h("div", { class: "stack" },
-    h("div", { class: "grid grid-2" },
-      acard("Students per department", deptRows.length ? barsChart(deptLabels, studentsPerDept) : emptyState("No data yet", "📊")),
-      acard("Active interns per department", deptRows.length ? barsChart(deptLabels, internsPerDept, { color: "var(--emerald)" }) : emptyState("No data yet", "📊"))),
-    h("div", { class: "grid grid-2" },
-      acard("Applications per week", barsChart(weekLabels, d.weeks.map((w) => w.applications))),
-      acard("Reports per week", barsChart(weekLabels, d.weeks.map((w) => w.reports), { color: "var(--violet)" }))),
-    h("div", { class: "grid grid-2" },
-      acard("Attendance breakdown", h("div", { class: "flex", style: "gap:24px;align-items:center" },
-        donut(attPct, attPct + "%", "present"),
-        h("div", { class: "flex-col" },
-          (["present", "absent", "leave", "holiday"]).map((k) =>
-            h("div", { class: "flex" }, statusBadge(k, k), h("span", { class: "grow" }), h("b", att[k] || 0)))))),
-      acard("Company verification status", h("div", { class: "flex-col" }, (d.companies || []).map((c) =>
-        h("div", { class: "flex" }, statusBadge(c.status), h("div", { class: "grow" }), h("b", c.count)))))));
-}
-
-/* ---------------- announcements ---------------- */
-function adminAnnouncements(d, c) {
-  const form = h("form", { class: "card", onsubmit: (e) => { e.preventDefault(); post(); return false; } },
-    h("div", { class: "card-head" }, h("h3", "Broadcast announcement")),
-    h("div", { class: "field" }, h("label", "Title *"), h("input", { class: "input", id: "an-title", required: true, placeholder: "Placement drive: TechFlow Systems" })),
-    h("div", { class: "field" }, h("label", "Message"), h("textarea", { class: "textarea", id: "an-body", placeholder: "On-campus hiring for SDE roles. Register by Friday…" })),
-    h("div", { class: "actions" }, h("button", { class: "btn btn-primary", type: "submit" }, icon("megaphone"), "Send to everyone")));
-  async function post() {
-    try {
-      await API.post("/admin/announcements", { title: document.getElementById("an-title").value, body: document.getElementById("an-body").value });
-      toast("Announcement sent to all students, faculty and companies", "success");
-      document.getElementById("an-title").value = ""; document.getElementById("an-body").value = "";
-      refresh();
-    } catch (e) { toast(e.message, "error"); }
-  }
-  function refresh() { aview(c, async () => adminAnnouncements(await API.get("/announcements"), c)); }
-  const annItems = (d.items || []).map((a) => {
-    const body = h("div", { class: "grow" },
-      h("b", a.title),
-      h("div", { class: "muted" }, a.body),
-      h("time", { class: "muted", style: "font-size:11px" }, fmtDateTime(a.created_at)));
-    return h("div", { class: "list-item" },
-      h("div", { class: "avatar" }, icon("megaphone")),
-      body);
-  });
-  return h("div", { class: "grid grid-1-2" },
-    form,
-    acard("Recent announcements", h("div", { class: "flex-col" }, annItems)));
-}
-
-/* ---------------- views ---------------- */
-const adminViews = {
-  dashboard: (c) => aview(c, async () => adminDashboard(await API.get("/admin/dashboard"))),
-  students: (c) => aview(c, async () => adminStudents(await API.get("/admin/students"), c)),
-  faculty: (c) => aview(c, async () => adminFaculty(await API.get("/admin/faculty"))),
-  companies: (c) => aview(c, async () => adminCompanies(await API.get("/admin/companies"), c, {})),
-  verification: (c) => aview(c, async () => adminVerification(await API.get("/admin/companies?status=pending"), c)),
-  internships: (c) => aview(c, async () => adminInternships(await API.get("/admin/internships"), c)),
-  applications: (c) => aview(c, async () => adminApplications(await API.get("/admin/applications"), c)),
-  certificates: (c) => aview(c, async () => adminCertificates(await API.get("/admin/certificates"), c)),
-  rankings: (c) => aview(c, async () => adminRankings(await API.get("/admin/rankings"))),
-  rewards: (c) => aview(c, async () => adminRewards()),
-  analytics: (c) => aview(c, async () => adminAnalytics(await API.get("/admin/analytics"))),
-  announcements: (c) => aview(c, async () => adminAnnouncements(await API.get("/announcements"), c)),
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Review queues</div><div class="card-sub">Keep the ecosystem trustworthy</div></div></div>
+        <div class="flex justify-between items-center" style="padding:11px 0;border-bottom:1px dashed var(--line)">
+          <span class="small">Company verification</span>
+          <button class="btn btn-sm btn-primary" onclick="switchPage('verification')">${s.pending_companies} pending →</button>
+        </div>
+        <div class="flex justify-between items-center" style="padding:11px 0;border-bottom:1px dashed var(--line)">
+          <span class="small">Certificate review</span>
+          <button class="btn btn-sm btn-primary" onclick="switchPage('certificates')">${s.pending_certificates} pending →</button>
+        </div>
+        <div class="flex justify-between items-center" style="padding:11px 0">
+          <span class="small">Report review (faculty)</span>
+          <button class="btn btn-sm btn-outline" onclick="switchPage('analytics')">${s.pending_reports} pending</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">This month</div>
+        <div class="card-sub">Application pipeline health</div>
+        <div class="flex justify-between items-center" style="padding:11px 0;border-bottom:1px dashed var(--line)">
+          <span class="small">Students joined internships</span><b>${s.joined_this_month}</b></div>
+        <div class="flex justify-between items-center" style="padding:11px 0;border-bottom:1px dashed var(--line)">
+          <span class="small">Check-ins today</span><b>${s.attendance_today}</b></div>
+        <div class="flex justify-between items-center" style="padding:11px 0">
+          <span class="small">Pending reports</span><b>${s.pending_reports}</b></div>
+      </div>
+    </div>`;
 };
 
-bootShell("admin", adminViews);
+/* ============================== COMPANY VERIFICATION ============================== */
+App.pages.verification = async function (content) {
+  const data = await API.get("/api/admin/companies");
+  const pending = data.items.filter((c) => c.status === "pending");
+  const done = data.items.filter((c) => c.status !== "pending");
+  content.innerHTML = `
+    <div class="grid grid-3 mb-16">
+      <div class="stat"><div class="stat-icon amber">${UI.icons.shield}</div><div><div class="stat-value">${pending.length}</div><div class="stat-label">Awaiting review</div></div></div>
+      <div class="stat"><div class="stat-icon green">✓</div><div><div class="stat-value">${done.filter((c) => c.status === "verified").length}</div><div class="stat-label">Verified</div></div></div>
+      <div class="stat"><div class="stat-icon rose">✗</div><div><div class="stat-value">${done.filter((c) => c.status === "rejected").length}</div><div class="stat-label">Rejected</div></div></div>
+    </div>
+    <div class="card mb-16">
+      <div class="card-title">Pending verification</div>
+      <div class="card-sub">Approve companies so students can trust their internships</div>
+      ${pending.length ? pending.map((c) => `
+        <div class="review-card">
+          <div class="rc-head">
+            <div class="flex items-center gap-12">
+              <div class="avatar" style="background:${UI.avatarColor(c.name)}">${UI.esc(c.name[0])}</div>
+              <div><div class="bold">${UI.esc(c.name)}</div>
+                <div class="muted small">${UI.esc(c.industry || "—")} · ${UI.esc(c.location || "—")} · ${UI.esc(c.owner_email)}</div></div>
+            </div>
+            <span class="badge badge-amber">Pending</span>
+          </div>
+          ${c.description ? `<div class="rc-body">${UI.esc(c.description)}</div>` : ""}
+          ${c.website ? `<div class="small mb-8">🌐 <a href="${UI.esc(c.website)}" target="_blank">${UI.esc(c.website)}</a></div>` : ""}
+          <div class="field"><input class="input" placeholder="Note (optional)" id="cnote-${c.id}" /></div>
+          <div class="rc-actions">
+            <button class="btn btn-success btn-sm" onclick="verifyCompany(${c.id}, true)">${UI.icons.check} Approve &amp; verify</button>
+            <button class="btn btn-danger btn-sm" onclick="verifyCompany(${c.id}, false)">${UI.icons.x} Reject</button>
+          </div>
+        </div>`).join("") : '<div class="empty" style="padding:24px">No companies awaiting verification 🎉</div>'}
+    </div>
+    <div class="card">
+      <div class="card-title">All companies</div>
+      <div class="table-wrap mt-12" style="border:none">
+        <table class="tbl">
+          <thead><tr><th>Company</th><th>Industry</th><th>Location</th><th>Internships</th><th>Status</th></tr></thead>
+          <tbody>${done.map((c) => `
+            <tr><td><b>${UI.esc(c.name)}</b>${c.status === "verified" ? " " + UI.verifiedBadge() : ""}</td>
+              <td>${UI.esc(c.industry || "—")}</td><td>${UI.esc(c.location || "—")}</td>
+              <td>${c.internship_count}</td><td>${c.status === "verified" ? '<span class="badge badge-green">Verified</span>' : '<span class="badge badge-red">Rejected</span>'}</td></tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+};
+
+async function verifyCompany(id, approve) {
+  const note = document.getElementById("cnote-" + id)?.value || "";
+  if (!UI.promptDelete()) return;
+  try {
+    await API.post(`/api/admin/companies/${id}/verify`, { approve, note });
+    UI.toast(approve ? "✅ Company verified — badge is live." : "Company rejected.", approve ? "success" : "info");
+    switchPage("verification");
+  } catch (e) { UI.toast(e.message, "error"); }
+}
+
+/* ============================== CERTIFICATES ============================== */
+App.pages.certificates = async function (content) {
+  const data = await API.get("/api/admin/certificates");
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-title">Certificate review queue</div>
+      <div class="card-sub">Authenticate student certificates before they count</div>
+      ${data.items.length ? data.items.map((c) => `
+        <div class="review-card">
+          <div class="rc-head">
+            <div class="flex items-center gap-12">
+              ${UI.avatar(c.student?.name)}
+              <div><div class="bold">${UI.esc(c.title)}</div>
+                <div class="muted small">${UI.esc(c.student?.name || "—")} · ${UI.esc(c.company || "—")} · ${UI.esc(c.issued_by || "—")}</div>
+                <div class="muted" style="font-size:11px;font-family:monospace">${UI.esc(c.code)}</div></div>
+            </div>
+            <span class="badge badge-amber">Pending</span>
+          </div>
+          ${c.doc_path ? `<div class="small mb-12">📄 <a href="${UI.esc(c.doc_path)}" target="_blank">View document</a></div>` : ""}
+          <div class="field"><input class="input" placeholder="Review note (optional)" id="certnote-${c.id}" /></div>
+          <div class="rc-actions">
+            <button class="btn btn-success btn-sm" onclick="reviewCert(${c.id}, true)">${UI.icons.check} Approve (+100 pts)</button>
+            <button class="btn btn-danger btn-sm" onclick="reviewCert(${c.id}, false)">${UI.icons.x} Reject</button>
+          </div>
+        </div>`).join("") : '<div class="empty" style="padding:28px">No certificates awaiting review 🎉</div>'}
+    </div>`;
+};
+
+async function reviewCert(id, approve) {
+  const note = document.getElementById("certnote-" + id)?.value || "";
+  try {
+    await API.post(`/api/admin/certificates/${id}/review`, { approve, note });
+    UI.toast(approve ? "✅ Certificate approved +100 pts." : "Certificate rejected.", approve ? "success" : "info");
+    switchPage("certificates");
+  } catch (e) { UI.toast(e.message, "error"); }
+}
+
+/* ============================== STUDENTS ============================== */
+App.pages.students = async function (content) {
+  const [data, fac] = await Promise.all([API.get("/api/admin/students"), API.get("/api/admin/faculty")]);
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-head"><div><div class="card-title">All students</div><div class="card-sub">Assign mentors and manage access</div></div></div>
+      <div class="table-wrap" style="border:none">
+        <table class="tbl">
+          <thead><tr><th>Student</th><th>Branch</th><th>Points</th><th>Current internship</th><th>Mentor</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>${data.items.map((s) => `
+            <tr>
+              <td><div class="flex items-center gap-8">${UI.avatar(s.student.name)}<div><b>${UI.esc(s.student.name)}</b><div class="muted">${UI.esc(s.student.email)}</div></div></div></td>
+              <td>${UI.esc(s.student.branch || "—")}</td>
+              <td><b>${s.student.points}</b></td>
+              <td>${s.current_internship ? `<span class="badge badge-teal">${UI.esc(s.current_internship)}</span>` : "—"}</td>
+              <td>
+                <select class="input" style="padding:6px 9px;font-size:12.5px;min-width:150px" id="mentor-${s.student.id}">
+                  <option value="">Unassigned</option>
+                  ${fac.items.map((f) => `<option value="${f.id}" ${s.mentor === f.name ? "selected" : ""}>${UI.esc(f.name)}</option>`).join("")}
+                </select>
+              </td>
+              <td>${s.student.is_active === false ? '<span class="badge badge-red">Disabled</span>' : '<span class="badge badge-green">Active</span>'}</td>
+              <td>
+                <button class="btn btn-sm btn-outline" onclick="assignMentor(${s.student.id})">Set mentor</button>
+                <button class="btn btn-sm ${s.student.is_active === false ? "btn-success" : "btn-danger"}" onclick="toggleStudent(${s.student.id})">${s.student.is_active === false ? "Enable" : "Disable"}</button>
+              </td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+};
+
+async function assignMentor(id) {
+  const facultyId = document.getElementById("mentor-" + id)?.value;
+  try {
+    await API.post(`/api/admin/students/${id}/mentor`, { faculty_id: facultyId ? Number(facultyId) : null });
+    UI.toast("✅ Mentor updated.", "success");
+  } catch (e) { UI.toast(e.message, "error"); }
+}
+async function toggleStudent(id) {
+  if (!UI.promptDelete()) return;
+  try { await API.post(`/api/admin/students/${id}/toggle`); UI.toast("Student status updated.", "info"); switchPage("students"); }
+  catch (e) { UI.toast(e.message, "error"); }
+}
+
+/* ============================== FACULTY ============================== */
+App.pages.faculty = async function (content) {
+  const data = await API.get("/api/admin/faculty");
+  content.innerHTML = `
+    <div class="grid grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Add faculty member</div>
+        <div class="card-sub">Faculty get a mentor dashboard with report review</div>
+        <form onsubmit="return addFaculty(event)">
+          <div class="grid grid-2">
+            <div class="field"><label>Full name</label><input class="input" name="name" required placeholder="Prof. Jane Doe" /></div>
+            <div class="field"><label>Email</label><input class="input" type="email" name="email" required placeholder="jane@college.edu" /></div>
+          </div>
+          <div class="grid grid-2">
+            <div class="field"><label>Department</label><input class="input" name="department" placeholder="Computer Science" /></div>
+            <div class="field"><label>Designation</label><input class="input" name="designation" placeholder="Associate Professor" /></div>
+          </div>
+          <div class="field"><label>Password</label><input class="input" type="text" name="password" required minlength="6" placeholder="min 6 characters" /></div>
+          <button class="btn btn-primary" type="submit">Add faculty</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title">Faculty (${data.items.length})</div>
+        <div class="table-wrap mt-12" style="border:none">
+          <table class="tbl">
+            <thead><tr><th>Name</th><th>Department</th><th>Mentees</th></tr></thead>
+            <tbody>${data.items.map((f) => `
+              <tr><td><div class="flex items-center gap-8">${UI.avatar(f.name)}<div><b>${UI.esc(f.name)}</b><div class="muted">${UI.esc(f.email)}</div></div></div></td>
+                <td>${UI.esc(f.department || "—")}</td><td><span class="badge badge-blue">${f.mentees} mentees</span></td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+};
+
+async function addFaculty(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector("button[type=submit]");
+  btn.disabled = true;
+  try {
+    const fd = new FormData(e.target);
+    await API.post("/api/admin/faculty", {
+      name: fd.get("name"), email: fd.get("email"), password: fd.get("password"),
+      department: fd.get("department") || "", designation: fd.get("designation") || "",
+    });
+    UI.toast("✅ Faculty account created.", "success");
+    switchPage("faculty");
+  } catch (err) { UI.toast("⚠️ " + err.message, "error"); btn.disabled = false; }
+}
+
+/* ============================== INTERNSHIPS ============================== */
+App.pages.internships = async function (content) {
+  const data = await API.get("/api/admin/internships");
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-title">All internships</div>
+      <div class="card-sub">Close internships that should no longer accept applications</div>
+      <div class="table-wrap mt-12" style="border:none">
+        <table class="tbl">
+          <thead><tr><th>Internship</th><th>Company</th><th>Mode</th><th>Stipend</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
+          <tbody>${data.items.map((i) => `
+            <tr>
+              <td><b>${UI.esc(i.title)}</b></td>
+              <td>${UI.esc(i.company?.name || "—")} ${i.company?.verified ? UI.verifiedBadge() : ""}</td>
+              <td>${UI.modeIcon(i.mode)}</td>
+              <td>${UI.esc(i.stipend)}</td>
+              <td class="muted">${i.deadline ? UI.fmtDate(i.deadline) : "—"}</td>
+              <td>${UI.statusBadge(i.status)}</td>
+              <td>${i.status === "open" ? `<button class="btn btn-sm btn-danger" onclick="adminCloseInternship(${i.id})">Close</button>` : ""}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+};
+async function adminCloseInternship(id) {
+  if (!UI.promptDelete()) return;
+  try { await API.post(`/api/admin/internships/${id}/close`); UI.toast("Internship closed.", "info"); switchPage("internships"); }
+  catch (e) { UI.toast(e.message, "error"); }
+}
+
+/* ============================== APPLICATIONS ============================== */
+App.pages.applications = async function (content) {
+  const data = await API.get("/api/admin/applications");
+  const stages = ["applied", "under_review", "shortlisted", "interview", "selected", "joined", "completed", "rejected"];
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-title">College-wide applications</div>
+      <div class="card-sub">Move applications through the pipeline on behalf of companies</div>
+      <div class="table-wrap mt-12" style="border:none">
+        <table class="tbl">
+          <thead><tr><th>Student</th><th>Internship</th><th>Company</th><th>Applied</th><th>Status</th><th>Move to</th></tr></thead>
+          <tbody>${data.items.map((a) => `
+            <tr>
+              <td><div class="flex items-center gap-8">${UI.avatar(a.student?.name)}<b>${UI.esc(a.student?.name || "—")}</b></div></td>
+              <td>${UI.esc(a.internship.title)}</td>
+              <td>${UI.esc(a.internship.company?.name || "—")}</td>
+              <td class="muted">${UI.fmtDate(a.applied_at)}</td>
+              <td>${UI.statusBadge(a.status)}</td>
+              <td><select class="input" style="padding:6px 9px;font-size:12.5px" onchange="adminMoveStage(${a.id}, this.value)">
+                <option value="">—</option>
+                ${stages.map((s) => `<option value="${s}">${s.replace("_", " ")}</option>`).join("")}
+              </select></td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+};
+async function adminMoveStage(id, stage) {
+  if (!stage) return;
+  try { await API.post(`/api/admin/applications/${id}/stage`, { stage }); UI.toast("Application moved to " + stage.replace("_", " "), "success"); switchPage("applications"); }
+  catch (e) { UI.toast(e.message, "error"); }
+}
+
+/* ============================== RANKINGS ============================== */
+App.pages.rankings = async function (content) {
+  const data = await API.get("/api/admin/rankings");
+  const rankCls = (r) => (r === 1 ? "top" : r === 2 ? "top2" : r === 3 ? "top3" : "");
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-title">College rankings</div>
+      <div class="card-sub">Students ranked by reward points</div>
+      <div class="table-wrap mt-12" style="border:none">
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Student</th><th>Department</th><th>Branch</th><th>Streak</th><th>Points</th></tr></thead>
+          <tbody>${data.rows.map((r) => `
+            <tr>
+              <td><span class="lb-rank ${rankCls(r.rank)}" style="width:28px;height:28px">${r.rank}</span></td>
+              <td><div class="flex items-center gap-8">${UI.avatar(r.name)}<b>${UI.esc(r.name)}</b></div></td>
+              <td>${UI.esc(r.department || "—")}</td>
+              <td>${UI.esc(r.branch || "—")}</td>
+              <td>🔥 ${r.streak}</td>
+              <td><b style="color:var(--brand)">${r.points}</b></td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+};
+
+/* ============================== ANALYTICS ============================== */
+App.pages.analytics = async function (content) {
+  const d = await API.get("/api/admin/analytics");
+  content.innerHTML = `
+    <div class="grid grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Applications per day (14 days)</div>
+        <div class="mt-16">${UI.lineChart(d.applications_series.map((a) => ({ label: a.label, value: a.applications })))}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Attendance per day (14 days)</div>
+        <div class="mt-16">${UI.barChart(d.attendance_series.map((a) => ({ label: a.label.slice(0, 6), value: a.attendance })))}</div>
+      </div>
+    </div>
+    <div class="grid grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Application status distribution</div>
+        <div class="mt-16">${UI.donut(d.status_distribution)}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Internships by domain</div>
+        <div class="mt-16">${UI.barChart(Object.entries(d.domain_distribution).map(([k, v]) => ({ label: k.length > 12 ? k.slice(0, 11) + "…" : k, value: v })))}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Internships by company</div>
+      <div class="grid grid-2 mt-12">
+        ${Object.entries(d.company_distribution).map(([k, v]) => `
+          <div class="flex justify-between items-center" style="padding:9px 0;border-bottom:1px dashed var(--line)">
+            <span class="small bold">${UI.esc(k)}</span><span class="badge badge-blue">${v} internship${v > 1 ? "s" : ""}</span></div>`).join("")}
+      </div>
+    </div>`;
+};
+
+/* ============================== ANNOUNCEMENTS ============================== */
+App.pages.announcements = async function (content) {
+  const data = await API.get("/api/announcements");
+  content.innerHTML = `
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-title">Broadcast announcement</div>
+        <div class="card-sub">Notifies every user in the audience instantly</div>
+        <form onsubmit="return sendAnnouncement(event)">
+          <div class="field"><label>Title</label><input class="input" name="title" required placeholder="Placement drive on Friday" /></div>
+          <div class="field"><label>Message</label><textarea class="input" name="message" required placeholder="Details…"></textarea></div>
+          <div class="field"><label>Audience</label>
+            <select class="input" name="audience">
+              <option value="all">Everyone</option>
+              <option value="students">Students only</option>
+              <option value="faculty">Faculty only</option>
+              <option value="companies">Companies only</option>
+            </select></div>
+          <button class="btn btn-primary" type="submit">📢 Send announcement</button>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title">Recent announcements</div>
+        ${data.items.length ? data.items.map((a) => `
+          <div style="padding:12px 0;border-bottom:1px dashed var(--line)">
+            <div class="flex items-center gap-8"><b class="small">${UI.esc(a.title)}</b><span class="badge badge-gray">${UI.esc(a.audience)}</span></div>
+            <div class="muted small">${UI.esc(a.message)}</div>
+            <div class="muted" style="font-size:11px">${UI.timeAgo(a.created_at)}</div>
+          </div>`).join("") : '<div class="empty" style="padding:16px">No announcements yet</div>'}
+      </div>
+    </div>`;
+};
+async function sendAnnouncement(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector("button[type=submit]");
+  btn.disabled = true;
+  try {
+    const fd = new FormData(e.target);
+    await API.post("/api/admin/announcements", {
+      title: fd.get("title"), message: fd.get("message"), audience: fd.get("audience"),
+    });
+    UI.toast("📢 Announcement broadcast!", "success");
+    switchPage("announcements");
+  } catch (err) { UI.toast("⚠️ " + err.message, "error"); btn.disabled = false; }
+}
+
+/* ============================== REWARD CONFIG ============================== */
+App.pages.rewards = async function (content) {
+  const data = await API.get("/api/admin/reward-config");
+  const labels = {
+    daily_report: "Daily report approved", weekly_report: "Weekly summary approved",
+    attendance_day: "Daily check-in", internship_completed: "Internship completed",
+    certificate_verified: "Certificate verified",
+  };
+  content.innerHTML = `
+    <div class="card" style="max-width:560px">
+      <div class="card-title">Reward point configuration</div>
+      <div class="card-sub">Points are awarded instantly when these actions happen</div>
+      <form onsubmit="return saveRewardConfig(event)">
+        ${Object.entries(labels).map(([key, label]) => `
+          <div class="flex items-center justify-between gap-12" style="padding:13px 0;border-bottom:1px dashed var(--line)">
+            <label for="rc-${key}" class="small bold">${UI.esc(label)}</label>
+            <input class="input" id="rc-${key}" type="number" min="0" value="${data.config[key]}" style="width:90px;text-align:center" />
+          </div>`).join("")}
+        <button class="btn btn-primary mt-16" type="submit">Save configuration</button>
+      </form>
+    </div>`;
+};
+async function saveRewardConfig(e) {
+  e.preventDefault();
+  const payload = {};
+  ["daily_report", "weekly_report", "attendance_day", "internship_completed", "certificate_verified"].forEach((k) => {
+    payload[k] = Number(document.getElementById("rc-" + k).value) || 0;
+  });
+  try { await API.put("/api/admin/reward-config", payload); UI.toast("✅ Reward config saved.", "success"); }
+  catch (err) { UI.toast("⚠️ " + err.message, "error"); }
+}
+
+/* ============================== ACTIVITY LOG ============================== */
+App.pages.activity = async function (content) {
+  const data = await API.get("/api/activity");
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-title">Activity log</div>
+      <div class="card-sub">Every important action across the platform</div>
+      <div class="table-wrap mt-12" style="border:none">
+        <table class="tbl">
+          <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>
+          <tbody>${data.map((a) => `
+            <tr>
+              <td class="muted">${UI.timeAgo(a.created_at)}</td>
+              <td><b>${UI.esc(a.actor || "—")}</b></td>
+              <td><span class="badge badge-blue">${UI.esc(a.action.replace("_", " "))}</span></td>
+              <td class="muted">${UI.esc(a.details || "")}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+};

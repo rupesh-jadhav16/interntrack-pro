@@ -1,16 +1,61 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>InternTracker — Student</title>
-<link rel="stylesheet" href="/static/css/app.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student — InternTracker</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230d9488'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>IT</text></svg>" />
+  <link rel="stylesheet" href="/static/css/app.css" />
 </head>
 <body>
-<div id="app"></div>
-<script src="/static/js/api.js"></script>
-<script src="/static/js/ui.js"></script>
-<script src="/static/js/shell.js"></script>
-<script src="/static/js/student.js"></script>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <a class="logo" href="/" style="text-decoration:none">
+          <span class="logo-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <span class="logo-text">Intern<span style="color:#14b8a6">Tracker</span></span>
+        </a>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-label">Student</div>
+        <button class="nav-item active" data-page="dashboard" data-title="Dashboard" data-sub="Your internship at a glance"><span id="ic-dashboard"></span>Dashboard</button>
+        <button class="nav-item" data-page="explorer" data-title="Internship Explorer" data-sub="Search, filter and apply"><span id="ic-explorer"></span>Explore Internships</button>
+        <button class="nav-item" data-page="applications" data-title="My Applications" data-sub="Track every application"><span id="ic-applications"></span>Applications</button>
+        <button class="nav-item" data-page="tracker" data-title="Internship Tracker" data-sub="Activate and manage your internship"><span id="ic-tracker"></span>Tracker</button>
+        <button class="nav-item" data-page="reports" data-title="Daily &amp; Weekly Reports" data-sub="Log progress, earn points"><span id="ic-report"></span>Reports</button>
+        <button class="nav-item" data-page="attendance" data-title="Attendance" data-sub="Check in, check out, calendar"><span id="ic-attendance"></span>Attendance</button>
+        <button class="nav-item" data-page="deadlines" data-title="Deadlines" data-sub="Never miss a window"><span id="ic-deadlines"></span>Deadlines</button>
+        <button class="nav-item" data-page="leaderboard" data-title="Leaderboard" data-sub="College-wide rankings"><span id="ic-leaderboard"></span>Leaderboard</button>
+        <button class="nav-item" data-page="rewards" data-title="Rewards" data-sub="Points, badges &amp; streaks"><span id="ic-rewards"></span>Rewards</button>
+        <button class="nav-item" data-page="certificates" data-title="Certificates" data-sub="Verify your achievements"><span id="ic-certificates"></span>Certificates</button>
+        <button class="nav-item" data-page="profile" data-title="My Profile" data-sub="Complete your student profile"><span id="ic-profile"></span>Profile</button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="side-user" onclick="toggleDropdown('userDropdown')" id="sideUser"></div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="menu-btn" onclick="toggleSidebar()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+        <div><div class="page-title" id="pageTitle">Dashboard</div><div class="page-sub" id="pageSub"></div></div>
+        <div class="topbar-right">
+          <div class="dropdown" id="notifWrap"></div>
+          <div class="dropdown" id="userWrap"></div>
+        </div>
+      </header>
+      <main class="content" id="content">
+        <div class="loading-page"><div class="spinner"></div></div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/shell.js"></script>
+  <script src="/static/js/student.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => shellInit("student"));
+  </script>
 </body>
 </html>

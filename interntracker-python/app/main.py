@@ -1,43 +1,17 @@
-"""InternTracker - FastAPI application entrypoint.
+"""InternTracker — FastAPI entrypoint.
 
-Run locally:
-    pip install -r requirements.txt
+Run:
     uvicorn app.main:app --reload --port 8000
-Then open http://localhost:8000
 """
-import os
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 
-from . import config
+from .config import STATIC_DIR, UPLOAD_DIR
 from .database import Base, SessionLocal, engine
 from .routers import admin, auth, common, company, faculty, student
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-
-
-def init_db_and_seed():
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        from .seed import seed_if_empty
-        seed_if_empty(db)
-    finally:
-        db.close()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db_and_seed()
-    yield
-
-
-app = FastAPI(title="InternTracker", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="InternTracker", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,6 +20,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+def on_startup():
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        from .seed import seed
+
+        seed(db)
+    finally:
+        db.close()
+
+
 app.include_router(auth.router)
 app.include_router(common.router)
 app.include_router(student.router)
@@ -53,29 +40,47 @@ app.include_router(faculty.router)
 app.include_router(admin.router)
 app.include_router(company.router)
 
-# uploaded files
-os.makedirs(config.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=config.UPLOAD_DIR), name="uploads")
 
-# frontend static assets
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+@app.get("/api/health")
+def health():
+    return {"ok": True, "app": "InternTracker"}
 
-# simple page routes (must be registered after /static and /uploads)
+
+# ---------------------------------------------------------------------------
+# Static frontend (plain HTML/CSS/JS) — served manually because the
+# catch-all SPA route below would otherwise shadow Starlette mounts.
+# ---------------------------------------------------------------------------
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 PAGES = {
-    "/": "index.html",
-    "/index.html": "index.html",
-    "/student": "student.html",
-    "/faculty": "faculty.html",
-    "/admin": "admin.html",
-    "/company": "company.html",
+    "": "index.html",
+    "student": "student.html",
+    "faculty": "faculty.html",
+    "admin": "admin.html",
+    "company": "company.html",
 }
 
 
-@app.get("/{page_path:path}", include_in_schema=False, response_class=HTMLResponse)
-def serve_page(page_path: str):
-    fname = PAGES.get("/" + page_path if page_path else "/", "index.html")
-    path = os.path.join(STATIC_DIR, fname)
-    if not os.path.exists(path):
-        raise HTTPException(404, "Frontend not built")
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+def _safe_join(root, rel):
+    """Resolve a relative file path inside root, blocking traversal."""
+    target = (root / rel).resolve()
+    if root.resolve() not in target.parents and target != root.resolve():
+        return None
+    return target if target.exists() and target.is_file() else None
+
+
+@app.get("/{path:path}", include_in_schema=False)
+def serve_page(path: str):
+    if path.startswith("static/"):
+        target = _safe_join(STATIC_DIR, path[len("static/"):])
+        return FileResponse(target) if target else JSONResponse(status_code=404, content={"detail": "Not found"})
+    if path.startswith("uploads/"):
+        target = _safe_join(UPLOAD_DIR, path[len("uploads/"):])
+        return FileResponse(target) if target else JSONResponse(status_code=404, content={"detail": "Not found"})
+    # role workspaces + deep links
+    if path in PAGES:
+        return FileResponse(STATIC_DIR / PAGES[path])
+    if path.startswith(("student/", "faculty/", "admin/", "company/")):
+        role = path.split("/")[0]
+        return FileResponse(STATIC_DIR / f"{role}.html")
+    return JSONResponse(status_code=404, content={"detail": "Not found"})

@@ -1,25 +1,45 @@
-"""Central configuration. Every value can be overridden with environment variables."""
+"""Central configuration for InternTracker."""
 import os
+from pathlib import Path
 
-# --- Database -------------------------------------------------------------
-# Default to local PostgreSQL. Override with DATABASE_URL if you use another
-# database/user/password. Example:
-#   DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/interntracker
-# For a zero-setup quick demo you can use SQLite instead:
-#   DATABASE_URL=sqlite:///./interntracker.db
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Default to local PostgreSQL. Override with DATABASE_URL env var.
+# SQLite fallback: sqlite:///./interntracker.db
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+psycopg://postgres:postgres@localhost:5432/interntracker",
 )
 
-# JWT secret - CHANGE THIS in production
-SECRET_KEY = os.getenv("SECRET_KEY", "interntracker-hackathon-secret-change-me")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "72"))
+SECRET_KEY = os.getenv("SECRET_KEY", "interntracker-dev-secret-change-me")
+JWT_ALGO = "HS256"
+TOKEN_EXPIRE_DAYS = 7
 
-# Uploads
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads"))
-MAX_UPLOAD_MB = 5
+COLLEGE_NAME = os.getenv("COLLEGE_NAME", "Greenfield Institute of Technology")
 
-# College shown across the app
-COLLEGE_NAME = os.getenv("COLLEGE_NAME", "Springfield Institute of Technology")
+UPLOAD_DIR = BASE_DIR / "uploads"
+STATIC_DIR = BASE_DIR / "static"
+
+# Default reward point values (admin can tweak via /api/admin/reward-config)
+REWARD_DEFAULTS = {
+    "daily_report": 10,
+    "weekly_report": 50,
+    "attendance_day": 5,
+    "internship_completed": 200,
+    "certificate_verified": 100,
+}
+
+# Application pipeline stages in order
+APPLICATION_STAGES = [
+    "applied",
+    "under_review",
+    "shortlisted",
+    "interview",
+    "selected",
+    "joined",
+    "completed",
+]
+REJECTED = "rejected"
+
+INTERNSHIP_MODES = ["remote", "onsite", "hybrid", "wfh"]
+INTERNSHIP_TYPES = ["on-campus", "off-campus", "college-provided", "self-found"]

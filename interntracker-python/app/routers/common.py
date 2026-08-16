@@ -4,79 +4,129 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import config
+from ..config import UPLOAD_DIR
 from ..database import get_db
-from ..models import Announcement, Notification, StudentProfile, User
-from ..security import get_current_user, require_role
+from ..models import Announcement, Notification, User
+from ..security import get_current_user, public_user
 
 router = APIRouter(prefix="/api", tags=["common"])
 
 
-def _notif_dict(n: Notification) -> dict:
-    return {"id": n.id, "title": n.title, "body": n.body, "type": n.ntype,
-            "read": n.read, "created_at": n.created_at.isoformat() if n.created_at else None}
-
-
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
 @router.get("/notifications")
 def list_notifications(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    items = db.query(Notification).filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(50).all()
-    unread = db.query(Notification).filter_by(user_id=user.id, read=False).count()
-    return {"items": [_notif_dict(n) for n in items], "unread": unread}
+    items = (
+        db.query(Notification)
+        .filter(Notification.user_id == user.id)
+        .order_by(Notification.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    return [
+        {
+            "id": n.id,
+            "title": n.title,
+            "message": n.message,
+            "type": n.type,
+            "read": bool(n.read),
+            "created_at": n.created_at.isoformat(),
+        }
+        for n in items
+    ]
 
 
-@router.post("/notifications/{nid}/read")
-def mark_read(nid: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    n = db.get(Notification, nid)
-    if n and n.user_id == user.id:
-        n.read = True
-        db.commit()
-    return {"ok": True}
-
-
-@router.post("/notifications/read-all")
-def read_all(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    db.query(Notification).filter_by(user_id=user.id, read=False).update({"read": True})
+@router.post("/notifications/read")
+def mark_notifications_read(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db.query(Notification).filter(Notification.user_id == user.id, Notification.read.is_(False)).update(
+        {"read": True}
+    )
     db.commit()
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# Announcements
+# ---------------------------------------------------------------------------
 @router.get("/announcements")
 def list_announcements(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     items = db.query(Announcement).order_by(Announcement.created_at.desc()).limit(10).all()
-    return {"items": [{"id": a.id, "title": a.title, "body": a.body,
-                       "created_at": a.created_at.isoformat() if a.created_at else None} for a in items]}
+    return [
+        {
+            "id": a.id,
+            "title": a.title,
+            "message": a.message,
+            "audience": a.audience,
+            "created_at": a.created_at.isoformat(),
+        }
+        for a in items
+    ]
 
 
+# ---------------------------------------------------------------------------
+# Leaderboard
+# ---------------------------------------------------------------------------
 @router.get("/leaderboard")
-def leaderboard(department: str = "", period: str = "all", user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
-    q = db.query(StudentProfile, User).join(User, User.id == StudentProfile.user_id)
-    if department:
-        q = q.filter(StudentProfile.department == department)
-    rows = q.order_by(StudentProfile.points.desc()).limit(50).all()
-    out = []
-    for i, (sp, u) in enumerate(rows, start=1):
-        out.append({
-            "rank": i, "student_id": sp.user_id, "name": u.name, "department": sp.department,
-            "points": sp.points, "streak": sp.current_streak, "longest_streak": sp.longest_streak,
-            "cgpa": sp.cgpa, "badges": len(sp.badges or []),
-        })
-    return {"items": out}
+def leaderboard(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    students = (
+        db.query(User)
+        .filter(User.role == "student", User.is_active.is_(True))
+        .order_by(User.points.desc())
+        .limit(50)
+        .all()
+    )
+    rows = []
+    for idx, s in enumerate(students, start=1):
+        rows.append(
+            {
+                "rank": idx,
+                "name": s.name,
+                "points": s.points or 0,
+                "streak": s.streak or 0,
+                "department": s.department,
+                "avatar": s.avatar or s.name[0].upper(),
+                "is_me": s.id == user.id,
+            }
+        )
+    return {"rows": rows}
 
 
+# ---------------------------------------------------------------------------
+# File uploads (offer letters, resumes, certificates, company docs)
+# ---------------------------------------------------------------------------
 @router.post("/upload")
-async def upload(file: UploadFile = File(...), user: User = Depends(get_current_user)):
-    os.makedirs(config.UPLOAD_DIR, exist_ok=True)
-    ext = os.path.splitext(file.filename or "")[1].lower()[:10]
-    if not ext:
-        ext = ".bin"
-    name = f"{uuid.uuid4().hex}{ext}"
-    dest = os.path.join(config.UPLOAD_DIR, name)
-    content = await file.read()
-    if len(content) > config.MAX_UPLOAD_MB * 1024 * 1024:
-        raise HTTPException(413, f"File too large (max {config.MAX_UPLOAD_MB} MB)")
-    with open(dest, "wb") as f:
-        f.write(content)
-    return {"url": f"/uploads/{name}", "name": file.filename}
+def upload_file(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx"}:
+        raise HTTPException(status_code=400, detail="Only pdf/png/jpg/doc files are allowed")
+    fname = f"{uuid.uuid4().hex}{ext}"
+    dest = UPLOAD_DIR / fname
+    with open(dest, "wb") as fh:
+        fh.write(file.file.read())
+    return {"path": f"/uploads/{fname}", "name": file.filename or fname}
+
+
+# ---------------------------------------------------------------------------
+# Activity log (admin)
+# ---------------------------------------------------------------------------
+@router.get("/activity")
+def activity(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
+    from ..models import ActivityLog
+
+    items = db.query(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(50).all()
+    return [
+        {
+            "actor": a.actor_name,
+            "action": a.action,
+            "details": a.details,
+            "created_at": a.created_at.isoformat(),
+        }
+        for a in items
+    ]

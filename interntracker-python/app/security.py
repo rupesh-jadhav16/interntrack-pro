@@ -1,19 +1,21 @@
-"""Password hashing, JWT helpers, and FastAPI auth dependencies."""
+"""Auth primitives: bcrypt hashing, JWT tokens, role guards, helpers."""
+import json
 from datetime import datetime, timedelta
+from functools import wraps
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
-from . import config
+from .config import JWT_ALGO, SECRET_KEY, TOKEN_EXPIRE_DAYS
 from .database import get_db
-from .models import User
-
-bearer = HTTPBearer(auto_error=False)
+from .models import ActivityLog, Notification, Reward, User
 
 
+# ---------------------------------------------------------------------------
+# Password + token helpers
+# ---------------------------------------------------------------------------
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -29,48 +31,156 @@ def create_token(user: User) -> str:
     payload = {
         "sub": str(user.id),
         "role": user.role,
-        "exp": datetime.utcnow() + timedelta(hours=config.JWT_EXPIRE_HOURS),
+        "exp": datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS),
     }
-    return jwt.encode(payload, config.SECRET_KEY, algorithm=config.JWT_ALGORITHM)
+    return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGO)
 
 
 def decode_token(token: str) -> dict:
-    return jwt.decode(token, config.SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGO])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    authorization: str = Header(default=""),
     db: Session = Depends(get_db),
 ) -> User:
-    if credentials is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
-    try:
-        payload = decode_token(credentials.credentials)
-    except jwt.PyJWTError:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
-    user = db.get(User, int(payload["sub"]))
-    if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = decode_token(authorization[7:])
+    user = db.query(User).filter(User.id == int(payload["sub"])).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Account not found or disabled")
     return user
 
 
-def require_role(*roles: str):
-    def dep(user: User = Depends(get_current_user)) -> User:
+def require_roles(*roles):
+    """Dependency factory: only allow the given roles."""
+
+    def checker(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not have access to this resource")
+            raise HTTPException(status_code=403, detail="You don't have access to this feature")
         return user
 
-    return dep
+    return checker
 
 
-def log_activity(db: Session, actor_id, action: str, detail: str = ""):
-    from .models import ActivityLog
+require_student = require_roles("student")
+require_faculty = require_roles("faculty", "admin")
+require_admin = require_roles("admin")
+require_company = require_roles("company")
 
-    db.add(ActivityLog(actor_id=actor_id, action=action, detail=detail))
+
+# ---------------------------------------------------------------------------
+# Small helpers
+# ---------------------------------------------------------------------------
+def notify(db: Session, user_id: int, title: str, message: str, ntype: str = "info"):
+    db.add(Notification(user_id=user_id, title=title, message=message, type=ntype))
     db.commit()
 
 
-def notify(db: Session, user_id: int, title: str, body: str, ntype: str = "info"):
-    from .models import Notification
+def log_action(db: Session, user: User, action: str, details: str = ""):
+    db.add(
+        ActivityLog(
+            user_id=user.id,
+            actor_name=user.name,
+            action=action,
+            details=details,
+        )
+    )
+    db.commit()
 
-    db.add(Notification(user_id=user_id, title=title, body=body, ntype=ntype))
+
+def public_user(u: User) -> dict:
+    """Safe user summary for the API."""
+    return {
+        "id": u.id,
+        "role": u.role,
+        "name": u.name,
+        "email": u.email,
+        "avatar": u.avatar or (u.name[0].upper() if u.name else "U"),
+        "company_name": u.company_name,
+        "verified": u.verified,
+        "verification_status": u.verification_status,
+        "points": u.points or 0,
+        "streak": u.streak or 0,
+        "department": u.department,
+        "branch": u.branch,
+        "year": u.year,
+        "cgpa": u.cgpa,
+        "profile_completed": bool(u.profile_completed),
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
+def company_payload(c) -> dict:
+    return {
+        "id": c.id,
+        "user_id": c.user_id,
+        "name": c.name,
+        "website": c.website,
+        "industry": c.industry,
+        "description": c.description,
+        "location": c.location,
+        "status": c.status,
+        "logo": c.logo,
+    }
+
+
+def internship_payload(i, company=None, applied=False, saved=False, distance=None) -> dict:
+    comp = company or (i.company if i.company else None)
+    return {
+        "id": i.id,
+        "title": i.title,
+        "description": i.description,
+        "domain": i.domain,
+        "location": i.location,
+        "mode": i.mode,
+        "duration_months": i.duration_months,
+        "stipend": i.stipend,
+        "paid": bool(i.paid),
+        "skills": (i.skills or "").split(",") if i.skills else [],
+        "seats": i.seats,
+        "deadline": i.deadline.isoformat() if i.deadline else None,
+        "status": i.status,
+        "posted_at": i.posted_at.isoformat() if i.posted_at else None,
+        "company": {
+            "id": comp.id,
+            "name": comp.name,
+            "verified": bool(comp.user.verified) if comp.user else False,
+        }
+        if comp
+        else None,
+        "applied": applied,
+        "saved": saved,
+        "distance": distance,
+    }
+
+
+def add_points(db: Session, user: User, points: int, reason: str, badge: str = ""):
+    user.points = (user.points or 0) + points
+    db.add(Reward(user_id=user.id, points=points, reason=reason, badge=badge))
+    db.commit()
+
+
+def update_streak(db: Session, user: User, today: datetime | None = None):
+    """Keep streak: consecutive days with activity. Called on check-in/report."""
+    from .models import Attendance
+
+    today = today or datetime.utcnow()
+    if user.last_active_date == today.date():
+        return
+    from datetime import date, timedelta
+
+    yesterday = today.date() - timedelta(days=1)
+    if user.last_active_date == yesterday:
+        user.streak = (user.streak or 0) + 1
+    else:
+        user.streak = 1
+    user.last_active_date = today.date()
+    db.commit()

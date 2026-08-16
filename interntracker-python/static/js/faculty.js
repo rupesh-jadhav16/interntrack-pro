@@ -1,167 +1,188 @@
-/* ================= Faculty workspace ================= */
-async function fview(c, fn) {
-  c.innerHTML = "";
-  c.append(spinner());
-  try { c.replaceChildren(await fn()); }
-  catch (e) { c.replaceChildren(emptyState(e.message, "⚠️")); }
-}
+/* InternTracker — Faculty workspace */
 
-function fcard(title, body, headRight) {
-  return h("div", { class: "card" },
-    h("div", { class: "card-head" }, h("h3", title), headRight || null), body);
-}
+/* ============================== DASHBOARD ============================== */
+App.pages.dashboard = async function (content) {
+  const d = await API.get("/api/faculty/dashboard");
+  content.innerHTML = `
+    <div class="role-banner faculty fade-in">
+      <div class="rb-icon">${UI.icons.students}</div>
+      <div>
+        <h2>Faculty Dashboard</h2>
+        <p>${d.student_count} assigned students · ${d.active_trackers} active internship trackers</p>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-family:var(--display);font-size:26px;font-weight:800">${d.at_risk.length}</div>
+        <div style="font-size:11.5px;opacity:.85">students need attention</div>
+      </div>
+    </div>
 
-function studentRow(s, onclick) {
-  return h("div", { class: "list-item", style: "cursor:pointer", onclick },
-    h("div", { class: "avatar" }, initials(s.name)),
-    h("div", { class: "grow" },
-      h("b", s.name), h("div", { class: "muted" }, s.department + (s.branch ? " · " + s.branch : "") + " · Year " + s.year +
-        (s.enrollment ? " · " + s.enrollment.role + " @ " + s.enrollment.company : "")),
-      h("div", { class: "flex", style: "gap:6px;margin-top:6px" },
-        h("span", { class: "badge b-amber", style: "background:var(--amber-soft);color:var(--amber)" }, "🔥 " + s.streak),
-        h("span", { class: "badge b-sky", style: "background:var(--sky-soft);color:var(--sky)" }, "Attendance " + s.attendance_pct + "%"),
-        h("span", { class: "badge b-pending" }, s.pending_reports + " pending reports"))),
-    s.at_risk ? h("span", { class: "badge b-rejected" }, "⚠ At risk") : h("span", { class: "badge b-verified" }, "On track"));
-}
+    <div class="grid grid-4 mb-16">
+      <div class="stat"><div class="stat-icon blue">${UI.icons.students}</div><div><div class="stat-value">${d.student_count}</div><div class="stat-label">Assigned students</div></div></div>
+      <div class="stat"><div class="stat-icon teal">${UI.icons.tracker}</div><div><div class="stat-value">${d.active_trackers}</div><div class="stat-label">Active trackers</div></div></div>
+      <div class="stat"><div class="stat-icon amber">${UI.icons.review}</div><div><div class="stat-value">${d.pending_daily + d.pending_weekly}</div><div class="stat-label">Reports to review</div></div></div>
+      <div class="stat"><div class="stat-icon rose">⚠️</div><div><div class="stat-value">${d.at_risk.length}</div><div class="stat-label">At-risk students</div></div></div>
+    </div>
 
-function reviewModal(kind, r, onDone) {
-  const fb = h("textarea", { class: "textarea", id: "fb-text", placeholder: "Optional feedback for the student…" });
-  const m = modal(title, h("div", { class: "flex-col" },
-    h("div", { class: "flex" }, h("div", { class: "avatar" }, initials(r.student)), h("div", { class: "grow" },
-      h("b", r.student), h("div", { class: "muted" }, kind + " · " + (kind === "Daily" ? fmtDate(r.date) : "Week of " + fmtDate(r.week_start))))),
-    kind === "Daily"
-      ? h("div", { class: "alert sky" }, h("div", {}, h("b", "Tasks"), (r.tasks || "").slice(0, 300), h("div", { class: "mt" }, h("b", "Hours: "), r.hours + "h")))
-      : h("div", { class: "alert sky" }, h("div", {}, h("b", "Progress " + (r.progress || 0) + "%"), " · Attendance " + (r.attendance_pct || 0) + "% · " + (r.total_hours || 0) + " hours")),
-    h("div", { class: "field" }, h("label", "Feedback"), fb),
-    h("div", { class: "actions" },
-      h("button", { class: "btn btn-danger", onclick: async () => { await act(false, fb.value); } }, icon("x"), "Reject"),
-      h("button", { class: "btn btn-success", onclick: async () => { await act(true, fb.value); } }, icon("check"), "Approve"))));
-  async function act(approve, feedback) {
-    try {
-      await API.post(kind === "Daily" ? "/faculty/reports/daily/" + r.id + "/review" : "/faculty/reports/weekly/" + r.id + "/review",
-        { approve, feedback });
-      toast("Report " + (approve ? "approved ✓" : "rejected"), "success");
-      m.close(); onDone();
-    } catch (e) { toast(e.message, "error"); }
-  }
-}
-
-/* ---------------- dashboard ---------------- */
-function facultyDashboard(d) {
-  const stats = h("div", { class: "grid grid-4" },
-    stat("My students", d.total_students, null, "accent", "users"),
-    stat("Active internships", d.active_internships, null, "emerald", "briefcase"),
-    stat("At-risk flags", d.at_risk, "Need attention", d.at_risk ? "rose" : "emerald", "flame"),
-    stat("Pending reports", d.pending_reports, d.weekly_pending + " weekly missing", "amber", "file"));
-
-  const atRiskItems = (d.students || []).filter((s) => s.at_risk);
-  const atRisk = h("div", { class: "flex-col" }, atRiskItems.map((s) => {
-    const why = [];
-    if (s.streak === 0) why.push("No streak");
-    if (s.attendance_pct < 60 && s.days_missed >= 0) why.push("Attendance " + s.attendance_pct + "%");
-    if (s.days_missed) why.push(s.days_missed + " days since last report");
-    if (!why.length) why.push("Needs attention");
-    return h("div", { class: "alert rose" }, icon("flame"),
-      h("div", { class: "grow" },
-        h("b", s.name),
-        h("span", { class: "muted" }, why.join(" · "))));
-  }));
-
-  const top = (d.students || []).slice(0, 6);
-  const list = h("div", { class: "flex-col" }, top.map((s) => studentRow(s, () => openStudentDetail(s.id))));
-
-  return h("div", { class: "stack" },
-    stats,
-    h("div", { class: "grid grid-2-1" },
-      fcard("Students needing attention", d.at_risk ? atRisk : h("div", { class: "alert emerald" }, icon("check"), h("div", {}, h("b", "All clear"), "Every assigned student is on track.")), h("span", { class: "badge b-rejected" }, d.at_risk + " at risk")),
-      fcard("Weekly reports pending", h("div", { class: "flex-col" },
-        h("div", { style: "font-size:38px;font-weight:800" }, d.weekly_pending),
-        h("div", { class: "muted" }, "students haven't submitted this week's summary"),
-        h("a", { class: "btn btn-soft btn-sm", style: "align-self:flex-start;margin-top:10px", href: "#/reports" }, "Review reports"))),      fcard("Your students", list.length ? list : emptyState("No students assigned yet. The T&P cell assigns students to mentors.", "👥"))));
-}
-
-/* ---------------- students ---------------- */
-async function openStudentDetail(sid) {
-  try {
-    const d = await API.get("/faculty/students/" + sid);
-    const s = d.student;
-    const tabs = h("div", { class: "tab-bar" },
-      h("button", { class: "active", onclick: () => show("daily") }, "Daily reports"),
-      h("button", { onclick: () => show("weekly") }, "Weekly"),
-      h("button", { onclick: () => show("att") }, "Attendance"));
-    const daily = h("div", { class: "flex-col" }, (d.daily || []).map((r) =>
-      h("div", { class: "list-item" },
-        h("div", { class: "grow" }, h("b", fmtDate(r.date)), h("div", { class: "muted" }, (r.tasks || "").slice(0, 90)), r.feedback ? h("div", { class: "muted", style: "font-size:11.5px" }, "Feedback: " + r.feedback) : null),
-        statusBadge(r.status),
-        r.status === "pending" ? h("button", { class: "btn btn-sm btn-primary", onclick: () => reviewModal("Daily", { ...r, student: s.name }, () => m.close()) }, "Review") : null)));
-    const weekly = h("div", { class: "flex-col" }, (d.weekly || []).map((r) =>
-      h("div", { class: "list-item" }, h("div", { class: "grow" }, h("b", "Week of " + fmtDate(r.week_start)), h("div", { class: "muted" }, "Attendance " + r.attendance_pct + "% · " + r.total_hours + "h · progress " + r.progress + "%")), statusBadge(r.status))));
-    const att = h("div", { class: "flex-col" }, (d.attendance || []).slice(0, 30).map((a) =>
-      h("div", { class: "list-item" }, h("div", { class: "grow" }, h("b", fmtDate(a.date)), h("div", { class: "muted" }, a.summary || "")), statusBadge(a.status), h("span", { class: "muted" }, (a.hours || 0) + "h"))));
-    function show(which) {
-      tabs.querySelectorAll("button").forEach((b, i) => b.classList.toggle("active", (which === "daily" && i === 0) || (which === "weekly" && i === 1) || (which === "att" && i === 2)));
-      daily.style.display = which === "daily" ? "" : "none";
-      weekly.style.display = which === "weekly" ? "" : "none";
-      att.style.display = which === "att" ? "" : "none";
-    }
-    const m = modal(s.name + " — " + (s.enrollment ? s.enrollment.role + " @ " + s.enrollment.company : "no active internship"), h("div", { class: "flex-col" },
-      h("div", { class: "flex" },
-        h("span", { class: "badge b-amber", style: "background:var(--amber-soft);color:var(--amber)" }, "🔥 " + s.streak),
-        h("span", { class: "badge b-sky", style: "background:var(--sky-soft);color:var(--sky)" }, "Attendance " + s.attendance_pct + "%"),
-        h("span", { class: "badge b-accent", style: "background:var(--accent-soft);color:var(--accent-strong)" }, s.points + " pts"),
-        h("span", { class: "badge " + (s.at_risk ? "b-rejected" : "b-verified") }, s.at_risk ? "At risk" : "On track")),
-      tabs, daily, weekly, att));
-  } catch (e) { toast(e.message, "error"); }
-}
-
-/* ---------------- reports review ---------------- */
-function facultyReports(d, c) {
-  const dailyList = h("div", { class: "flex-col" });
-  const weeklyList = h("div", { class: "flex-col" });
-  const refresh = () => { fview(c, async () => facultyReports(await API.get("/faculty/reports/pending"), c)); };
-  dailyList.replaceChildren((d.daily || []).map((r) =>
-    h("div", { class: "list-item" },
-      h("div", { class: "avatar" }, initials(r.student)),
-      h("div", { class: "grow" }, h("b", r.student), h("div", { class: "muted" }, fmtDate(r.date) + " · " + r.hours + "h · " + (r.tasks || "").slice(0, 80)),
-        h("span", { class: "badge b-pending" }, "Pending review")),
-      h("button", { class: "btn btn-sm btn-primary", onclick: () => reviewModal("Daily", r, refresh) }, "Review"))));
-  weeklyList.replaceChildren((d.weekly || []).map((r) =>
-    h("div", { class: "list-item" },
-      h("div", { class: "avatar" }, initials(r.student)),
-      h("div", { class: "grow" }, h("b", r.student), h("div", { class: "muted" }, "Week of " + fmtDate(r.week_start) + " · progress " + (r.progress || 0) + "%"),
-        h("span", { class: "badge b-pending" }, "Pending review")),
-      h("button", { class: "btn btn-sm btn-primary", onclick: () => reviewModal("Weekly", r, refresh) }, "Review"))));
-
-  return h("div", { class: "grid grid-2" },
-    fcard("Pending daily reports (" + (d.daily || []).length + ")",
-      (d.daily || []).length ? dailyList : emptyState("All daily reports reviewed 🎉", "✅")),
-    fcard("Pending weekly summaries (" + (d.weekly || []).length + ")",
-      (d.weekly || []).length ? weeklyList : emptyState("All weekly summaries reviewed 🎉", "✅")));
-}
-
-/* ---------------- performance ---------------- */
-function facultyPerformance(d) {
-  const labels = (d.weeks || []).map((w) => fmtDate(w.week).slice(0, 6));
-  return h("div", { class: "stack" },
-    h("div", { class: "grid grid-3" },
-      stat("Reports / week", d.weeks.reduce((a, w) => a + w.reports, 0), "Last 8 weeks", "accent", "file"),
-      stat("Hours logged", d.weeks.reduce((a, w) => a + w.hours, 0), "Last 8 weeks", "emerald", "clock"),
-      stat("Students reporting", Math.max(...(d.weeks.map((w) => w.students_reporting).concat([0]))), "Peak in a week", "amber", "users")),
-    fcard("Reports submitted per week", barsChart(labels, d.weeks.map((w) => w.reports))),
-    fcard("Hours logged per week", barsChart(labels, d.weeks.map((w) => w.hours), { color: "var(--emerald)" })),
-    fcard("Students reporting per week", barsChart(labels, d.weeks.map((w) => w.students_reporting), { color: "var(--amber)" })));
-}
-
-/* ---------------- views ---------------- */
-const facultyViews = {
-  dashboard: (c) => fview(c, async () => facultyDashboard(await API.get("/faculty/dashboard"))),
-  students: (c) => fview(c, async () => {
-    const d = await API.get("/faculty/students");
-    return fcard("My students (" + d.items.length + ")",
-      h("div", { class: "flex-col" }, (d.items || []).map((s) => studentRow(s, () => openStudentDetail(s.id)))));
-  }),
-  reports: (c) => fview(c, async () => facultyReports(await API.get("/faculty/reports/pending"), c)),
-  performance: (c) => fview(c, async () => facultyPerformance(await API.get("/faculty/performance"))),
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Students needing attention</div><div class="card-sub">No streak, low attendance, or report gaps</div></div>
+          <a href="#students" class="small" onclick="switchPage('students')">All students →</a></div>
+        ${d.at_risk.length
+          ? d.at_risk.map((r) => `
+            <div class="flex gap-12" style="padding:12px 0;border-bottom:1px dashed var(--line)">
+              ${UI.avatar(r.student.name)}
+              <div style="flex:1;min-width:0">
+                <div class="bold small">${UI.esc(r.student.name)}</div>
+                ${r.flags.map((f) => `<div class="muted" style="font-size:12px">⚠️ ${UI.esc(f)}</div>`).join("")}
+              </div>
+              <button class="btn btn-sm btn-outline" onclick="viewStudent(${r.student.id})">View</button>
+            </div>`).join("")
+          : '<div class="empty" style="padding:20px">All students are on track 🎉</div>'}
+      </div>
+      <div class="card">
+        <div class="card-title">Approved reports — last 8 weeks</div>
+        <div class="mt-16">${UI.barChart(d.weekly_chart.map((w) => ({ label: w.label.slice(-3), value: w.reports })))}</div>
+      </div>
+    </div>`;
 };
 
-bootShell("faculty", facultyViews);
+/* ============================== STUDENTS ============================== */
+App.pages.students = async function (content) {
+  const data = await API.get("/api/faculty/students");
+  content.innerHTML = `
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Student</th><th>Branch</th><th>Year</th><th>Current internship</th><th>Applications</th><th>Flags</th><th></th></tr></thead>
+        <tbody>
+          ${data.items.map((s) => `
+            <tr>
+              <td><div class="flex items-center gap-8">${UI.avatar(s.student.name)}<div><b>${UI.esc(s.student.name)}</b><div class="muted">${s.student.points} pts · 🔥 ${s.student.streak}</div></div></div></td>
+              <td>${UI.esc(s.branch || "—")}</td>
+              <td>${UI.esc(s.year || "—")}</td>
+              <td>${s.current_internship ? `<span class="badge badge-teal">${UI.esc(s.current_internship)}</span>` : '<span class="muted">—</span>'}</td>
+              <td>${s.applications}</td>
+              <td>${s.flags.length ? `<span class="badge badge-red">${s.flags.length} flag${s.flags.length > 1 ? "s" : ""}</span>` : '<span class="badge badge-green">OK</span>'}</td>
+              <td><button class="btn btn-sm btn-outline" onclick="viewStudent(${s.student.id})">Details</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+};
+
+async function viewStudent(id) {
+  try {
+    const d = await API.get("/api/faculty/students/" + id);
+    const s = d.student;
+    UI.openModal(`
+      <div class="modal modal-lg">
+        <div class="modal-head"><h3>${UI.esc(s.name)}</h3><button class="x-btn" onclick="UI.closeModal()">✕</button></div>
+        <div class="modal-body">
+          <div class="flex items-center gap-12 mb-16">
+            ${UI.avatar(s.name, "lg")}
+            <div><div class="bold" style="font-size:16px">${UI.esc(s.name)}</div>
+              <div class="muted small">${UI.esc(d.profile.branch || "—")} · ${UI.esc(d.profile.year || "—")} · CGPA ${d.profile.cgpa ?? "—"}</div>
+              <div class="muted small">${s.points} pts · 🔥 ${s.streak} day streak</div></div>
+            ${d.tracker.company ? `<span class="badge badge-teal" style="margin-left:auto">● ${UI.esc(d.tracker.company)}</span>` : ""}
+          </div>
+          <div class="grid grid-2">
+            <div>
+              <div class="card-sub">Daily reports (latest)</div>
+              ${d.daily_reports.slice(0, 5).map((r) => `
+                <div style="padding:9px 0;border-bottom:1px dashed var(--line)">
+                  <div class="flex justify-between"><b class="small">${UI.fmtDate(r.report_date)}</b>${UI.statusBadge(r.status)}</div>
+                  <div class="muted small">${UI.esc(r.content)}</div>
+                  ${r.feedback ? `<div class="small" style="color:var(--brand)">💬 ${UI.esc(r.feedback)}</div>` : ""}
+                </div>`).join("") || '<div class="muted small">No reports</div>'}
+            </div>
+            <div>
+              <div class="card-sub">Attendance (latest)</div>
+              ${d.attendance.slice(0, 8).map((a) => `
+                <div class="flex justify-between" style="padding:6px 0;border-bottom:1px dashed var(--line)">
+                  <span class="small">${UI.fmtDate(a.day)}</span>
+                  <span class="small muted">${a.check_in ? new Date(a.check_in).toLocaleTimeString("en-IN") : "—"} ${a.hours ? "· " + a.hours + "h" : ""}</span>
+                </div>`).join("") || '<div class="muted small">No attendance</div>'}
+              <div class="card-sub mt-16">Weekly reports</div>
+              ${d.weekly_reports.slice(0, 3).map((r) => `
+                <div style="padding:7px 0;border-bottom:1px dashed var(--line)"><span class="badge badge-blue">${UI.esc(r.week_label)}</span> ${UI.statusBadge(r.status)}</div>`).join("") || '<div class="muted small">None</div>'}
+            </div>
+          </div>
+        </div>
+      </div>`);
+  } catch (e) { UI.toast(e.message, "error"); }
+}
+
+/* ============================== REVIEW QUEUE ============================== */
+App.pages.review = async function (content) {
+  const data = await API.get("/api/faculty/reports/pending");
+  content.innerHTML = `
+    <div class="tabs">
+      <button class="tab active" id="tabDaily">Daily reports (${data.daily.length})</button>
+      <button class="tab" id="tabWeekly">Weekly summaries (${data.weekly.length})</button>
+    </div>
+    <div id="reviewBody"></div>`;
+  const body = content.querySelector("#reviewBody");
+  const render = (kind) => {
+    const items = kind === "daily" ? data.daily : data.weekly;
+    if (!items.length) { body.innerHTML = `<div class="card">${UI.empty("Queue is empty 🎉", "New reports appear here as students submit them.")}</div>`; return; }
+    body.innerHTML = items.map((r) => `
+      <div class="review-card fade-in">
+        <div class="rc-head">
+          <div class="flex items-center gap-8">${UI.avatar(r.student.name)}<div><div class="bold small">${UI.esc(r.student.name)}</div>
+            <div class="muted" style="font-size:12px">${kind === "daily" ? UI.fmtDate(r.report_date) + " · " + r.hours + " hrs" : r.week_label}</div></div></div>
+          <span class="badge badge-amber">Pending</span>
+        </div>
+        <div class="rc-body">${UI.esc(r.content)}</div>
+        ${r.highlights ? `<div class="small mb-12"><b>Highlights:</b> ${UI.esc(r.highlights)}</div>` : ""}
+        <div class="field"><input class="input" placeholder="Feedback (optional)" id="fb-${r.id}" /></div>
+        <div class="rc-actions">
+          <button class="btn btn-success btn-sm" onclick="reviewReport('${kind}', ${r.id}, true)">${UI.icons.check} Approve (+${kind === "daily" ? 10 : 50} pts)</button>
+          <button class="btn btn-danger btn-sm" onclick="reviewReport('${kind}', ${r.id}, false)">${UI.icons.x} Reject</button>
+        </div>
+      </div>`).join("");
+  };
+  content.querySelector("#tabDaily").addEventListener("click", () => {
+    content.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    content.querySelector("#tabDaily").classList.add("active");
+    render("daily");
+  });
+  content.querySelector("#tabWeekly").addEventListener("click", () => {
+    content.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    content.querySelector("#tabWeekly").classList.add("active");
+    render("weekly");
+  });
+  render("daily");
+};
+
+async function reviewReport(kind, id, approve) {
+  const fb = document.getElementById("fb-" + id)?.value || "";
+  try {
+    await API.post(`/api/faculty/reports/${kind}/${id}/review`, { approve, feedback: fb });
+    UI.toast(approve ? "✅ Report approved — points awarded." : "Report rejected with feedback.", approve ? "success" : "info");
+    switchPage("review");
+  } catch (e) { UI.toast(e.message, "error"); }
+}
+
+/* ============================== PERFORMANCE ============================== */
+App.pages.performance = async function (content) {
+  const d = await API.get("/api/faculty/performance");
+  content.innerHTML = `
+    <div class="grid grid-2 mb-16">
+      <div class="card">
+        <div class="card-title">Approved daily reports — last 8 weeks</div>
+        <div class="mt-16">${UI.barChart(d.weekly_chart.map((w) => ({ label: w.label.slice(-3), value: w.reports })))}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Students present — last 14 days</div>
+        <div class="mt-16">${UI.lineChart(d.attendance_chart.map((a) => ({ label: a.label, value: a.present })))}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">How to read this</div>
+      <div class="card-sub">A healthy batch shows consistent weekly report volume and stable attendance</div>
+      <div class="grid grid-3 mt-12">
+        <div class="stat"><div class="stat-icon green">📈</div><div><div class="stat-value">↑ Reports</div><div class="stat-label">Approved report volume</div></div></div>
+        <div class="stat"><div class="stat-icon blue">📅</div><div><div class="stat-value">Present</div><div class="stat-label">Daily attendance count</div></div></div>
+        <div class="stat"><div class="stat-icon amber">⚠️</div><div><div class="stat-label" style="margin-top:6px">Dips = at-risk students. Review them under Students → Details.</div></div></div>
+      </div>
+    </div>`;
+};

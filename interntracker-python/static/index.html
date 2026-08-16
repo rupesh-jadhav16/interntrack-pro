@@ -1,303 +1,416 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>InternTracker — Track. Verify. Grow. | Internship Management for Colleges</title>
-<meta name="description" content="InternTracker is a centralized platform for colleges, students, T&P cells and companies to manage, verify, track and monitor internships.">
-<link rel="stylesheet" href="/static/css/app.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InternTracker — Track. Verify. Grow.</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230d9488'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>IT</text></svg>" />
+  <link rel="stylesheet" href="/static/css/app.css" />
 </head>
-<body>
-<div class="landing">
+<body class="landing">
 
-  <nav class="l-nav">
-    <div class="brand"><div class="logo">IT</div> InternTracker</div>
-    <div class="links">
-      <a href="#features">Features</a>
-      <a href="#roles">For your team</a>
-      <a href="#how">How it works</a>
-      <a href="#testimonials">Stories</a>
+  <!-- ============ NAV ============ -->
+  <nav class="landing-nav">
+    <div class="container landing-nav-inner">
+      <a class="logo" href="#top" style="text-decoration:none">
+        <span class="logo-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+        </span>
+        <span class="logo-text">Intern<span>Tracker</span></span>
+      </a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#benefits">Benefits</a>
+        <a href="#verify">Verification</a>
+        <a href="#stats">Impact</a>
+        <a href="#testimonials">Stories</a>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-ghost" style="color:#fff" onclick="openAuth('login')">Login</button>
+        <button class="btn btn-primary" onclick="openAuth('register')">Get Started</button>
+      </div>
     </div>
-    <div class="spacer"></div>
-    <button class="btn btn-ghost" onclick="Auth.open('login')">Sign in</button>
-    <button class="btn btn-primary" onclick="Auth.open('register')">Get started free</button>
   </nav>
 
-  <header class="hero">
-    <div class="kicker">🎓 Built for T&P Cells &amp; Colleges</div>
-    <h1>Track. Verify. Grow.<br><span class="grad">One platform for every internship.</span></h1>
-    <p>InternTracker brings students, faculty, T&amp;P cells and companies into one place — apply, log daily reports, track attendance, earn streaks and get certificates verified. No more spreadsheets.</p>
-    <div class="cta">
-      <button class="btn btn-primary" onclick="Auth.open('register')">Start tracking free</button>
-      <button class="btn btn-ghost" onclick="Auth.open('login')">I have an account</button>
-    </div>
-    <div class="trust">
-      <span><b>4 roles</b> — student, faculty, T&amp;P, company</span>
-      <span><b>Verified companies</b> &amp; certificates</span>
-      <span><b>Streaks</b>, leaderboards &amp; rewards</span>
+  <!-- ============ HERO ============ -->
+  <header class="hero" id="top">
+    <div class="container hero-inner">
+      <span class="hero-badge">● Live at Greenfield Institute of Technology — 6 colleges onboarded</span>
+      <h1>Track. Verify. Grow.<br /><span class="grad">Your Complete Internship Management Platform.</span></h1>
+      <p class="hero-sub">InternTracker connects students, colleges, faculty, and verified companies in one transparent internship ecosystem — from applications to daily reports to certificates.</p>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-lg" onclick="openAuth('register')">Get Started →</button>
+        <button class="btn btn-lg" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff" onclick="openAuth('login')">Login</button>
+        <a href="#how" class="btn btn-ghost btn-lg" style="color:#9fb0cc">Explore Internships ↓</a>
+      </div>
+      <div class="hero-stats">
+        <div class="hstat"><div class="v">1,200+</div><div class="l">Active students</div></div>
+        <div class="hstat"><div class="v">40+</div><div class="l">Verified companies</div></div>
+        <div class="hstat"><div class="v">98%</div><div class="l">Certificate authenticity</div></div>
+        <div class="hstat"><div class="v">4.8★</div><div class="l">Average student rating</div></div>
+      </div>
+
+      <div class="hero-cards">
+        <div class="hero-card">
+          <h4>🎯 Discover internships</h4>
+          <p>Search 100s of verified internships with filters for mode, stipend, domain, skills, and distance from you.</p>
+        </div>
+        <div class="hero-card">
+          <h4>🔥 Build your streak</h4>
+          <p>Submit daily reports, check in, and watch your streak and college rank climb with reward points.</p>
+        </div>
+        <div class="hero-card">
+          <h4>🛡️ Verified certificates</h4>
+          <p>Every certificate is reviewed by the T&P cell with an authenticity score — no fake internships, ever.</p>
+        </div>
+      </div>
     </div>
   </header>
 
-  <section class="l-section" id="features">
-    <div class="l-head">
-      <div class="kicker">Everything in one place</div>
-      <h2>From application to certificate, fully tracked</h2>
-      <p>Every stage of the internship journey — discover, apply, work, report, verify — lives in a single dashboard.</p>
-    </div>
-    <div class="l-grid">
-      <div class="l-card">
-        <div class="ico tone-accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div>
-        <h3>Internship explorer</h3>
-        <p>Search and filter live internships from verified companies. Save, apply and watch your application move through the pipeline.</p>
+  <!-- ============ HOW IT WORKS ============ -->
+  <section class="section" id="how">
+    <div class="container">
+      <div style="text-align:center">
+        <div class="sec-kicker">How it works</div>
+        <h2 class="sec-title">One platform. Four stakeholders. Zero chaos.</h2>
+        <p class="sec-sub" style="margin:0 auto">InternTracker digitises the entire internship lifecycle that colleges usually manage through spreadsheets and WhatsApp groups.</p>
       </div>
-      <div class="l-card">
-        <div class="ico tone-emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><path d="M12 22c4 0 7-2.7 7-7 0-3.6-2.4-6.4-4.3-8.4C13 5 12 3.5 12 2c-1.8 2.6-3 5.4-3 8a7 7 0 0 0 .7 3.1A3.8 3.8 0 0 1 8 11c0-.8.2-1.5.4-2.1A8.2 8.2 0 0 0 5 15c0 4.3 3 7 7 7z"/></svg></div>
-        <h3>Daily reports &amp; streaks</h3>
-        <p>Submit daily and weekly reports in seconds. Consistent reporting earns streaks, bonus points and badges.</p>
-      </div>
-      <div class="l-card">
-        <div class="ico tone-sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></div>
-        <h3>Attendance tracking</h3>
-        <p>Check in / check out, log hours and build a monthly calendar — visible to faculty, T&amp;P and companies.</p>
-      </div>
-      <div class="l-card">
-        <div class="ico tone-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
-        <h3>Verification, built in</h3>
-        <p>Companies submit registration docs; the T&amp;P cell verifies them. Certificates get an authenticity score — no more fake internships.</p>
-      </div>
-      <div class="l-card">
-        <div class="ico tone-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><path d="M8 21h8M12 17v4M7 4h10v6a5 5 0 0 1-10 0z"/><path d="M7 6H4a2 2 0 0 0 2 4h1M17 6h3a2 2 0 0 1-2 4h-1"/></svg></div>
-        <h3>Leaderboards &amp; rewards</h3>
-        <p>College and department rankings, milestone points and badges keep students consistent — and look great in reports.</p>
-      </div>
-      <div class="l-card">
-        <div class="ico tone-rose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10.3 21a2 2 0 0 0 3.4 0"/></svg></div>
-        <h3>Smart notifications</h3>
-        <p>Deadlines, interview dates, report reviews and announcements reach the right person automatically.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-icon" style="background:rgba(37,99,235,.1);color:#2563eb"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
+          <h4>Students apply</h4>
+          <p>Students complete profiles and apply to internships from verified companies with one click.</p>
+        </div>
+        <div class="step">
+          <div class="step-icon" style="background:rgba(245,158,11,.12);color:#b45309"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/></svg></div>
+          <h4>Companies hire</h4>
+          <p>Companies post internships and move applicants through a clear pipeline — shortlist, interview, select.</p>
+        </div>
+        <div class="step">
+          <div class="step-icon" style="background:rgba(13,148,136,.12);color:#0d9488"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h4>Faculty track</h4>
+          <p>Faculty review daily &amp; weekly reports, catch at-risk students, and give feedback that actually counts.</p>
+        </div>
+        <div class="step">
+          <div class="step-icon" style="background:rgba(124,58,237,.12);color:#7c3aed"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10"/><path d="M4 12h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></div>
+          <h4>T&amp;P verifies</h4>
+          <p>The T&amp;P cell verifies companies and certificates, so every badge on the platform is earned.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="l-section" id="roles">
-    <div class="l-head">
-      <div class="kicker">Built for every role</div>
-      <h2>One system, four perspectives</h2>
-      <p>Each role gets a purpose-built dashboard that answers the question that matters to them.</p>
-    </div>
-    <div class="l-grid-4">
-      <div class="l-card">
-        <div class="ico tone-accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg></div>
-        <h3>Students</h3>
-        <ul>
-          <li>“What do I need to do today?”</li>
-          <li>Reports, attendance, deadlines</li>
-          <li>Streaks, points &amp; certificates</li>
-        </ul>
+  <!-- ============ BENEFITS ============ -->
+  <section class="section section-alt" id="benefits">
+    <div class="container">
+      <div style="text-align:center">
+        <div class="sec-kicker">Benefits</div>
+        <h2 class="sec-title">Built for every stakeholder</h2>
+        <p class="sec-sub" style="margin:0 auto">Each role gets its own dashboard, permissions, and view of the same source of truth.</p>
       </div>
-      <div class="l-card">
-        <div class="ico tone-sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5 6.5-5s6.5 1.5 6.5 5M16 5a3.5 3.5 0 0 1 0 6.8M17.5 15.2c2.3.6 4 1.9 4 4.8"/></svg></div>
-        <h3>Faculty</h3>
-        <ul>
-          <li>“Which students need attention?”</li>
-          <li>Review reports in one queue</li>
-          <li>At-risk flags &amp; performance</li>
-        </ul>
-      </div>
-      <div class="l-card">
-        <div class="ico tone-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><path d="M3 3v18h18"/><path d="M7 15v-4M12 15V7M17 15v-6"/></svg></div>
-        <h3>T&amp;P Cell</h3>
-        <ul>
-          <li>“What's happening college-wide?”</li>
-          <li>Company &amp; certificate verification</li>
-          <li>Analytics, rankings, announcements</li>
-        </ul>
-      </div>
-      <div class="l-card">
-        <div class="ico tone-emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="21" height="21"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M9 21v-4h6v4"/></svg></div>
-        <h3>Companies</h3>
-        <ul>
-          <li>“Who do I need to manage?”</li>
-          <li>Post internships, move applicants</li>
-          <li>Monitor interns in real time</li>
-        </ul>
+      <div class="benefit-grid">
+        <div class="benefit">
+          <div class="bi" style="background:rgba(13,148,136,.12);color:#0d9488"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
+          <h4>For Students</h4>
+          <p>One dashboard for applications, streaks, reports, deadlines, rewards, and certificates. Gamified progress keeps you consistent — and your rank motivates you.</p>
+        </div>
+        <div class="benefit">
+          <div class="bi" style="background:rgba(37,99,235,.1);color:#2563eb"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg></div>
+          <h4>For Colleges</h4>
+          <p>Real-time visibility into every student's internship journey. Spot at-risk students before they fall behind, and showcase placement outcomes with analytics.</p>
+        </div>
+        <div class="benefit">
+          <div class="bi" style="background:rgba(245,158,11,.12);color:#b45309"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/></svg></div>
+          <h4>For Companies</h4>
+          <p>Post roles, manage the applicant pipeline, and monitor your interns' daily progress with attendance and report approval — all in one place.</p>
+        </div>
+        <div class="benefit">
+          <div class="bi" style="background:rgba(124,58,237,.12);color:#7c3aed"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h4>Verified Ecosystem</h4>
+          <p>Only T&amp;P-approved companies get the verified badge. Every certificate is scored for authenticity before it counts toward your record.</p>
+        </div>
+        <div class="benefit">
+          <div class="bi" style="background:rgba(22,163,74,.12);color:#16a34a"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></div>
+          <h4>Rewards &amp; Rankings</h4>
+          <p>Points for reports, attendance, and completed internships. Live leaderboards make great work visible across the college.</p>
+        </div>
+        <div class="benefit">
+          <div class="bi" style="background:rgba(225,29,72,.1);color:#e11d48"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h4>Deadline Radar</h4>
+          <p>Never miss an application window. Deadlines are grouped into overdue, due today, and upcoming — right on your dashboard.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="l-section" id="how">
-    <div class="l-head">
-      <div class="kicker">How it works</div>
-      <h2>From application to verified certificate</h2>
-    </div>
-    <div class="l-steps">
-      <div class="l-step"><div class="num">1</div><b>Create your account</b><p>Sign up as a student, faculty member, T&amp;P admin or company.</p></div>
-      <div class="l-step"><div class="num">2</div><b>Apply &amp; get selected</b><p>Browse verified internships, apply in one click and track your status.</p></div>
-      <div class="l-step"><div class="num">3</div><b>Log your work</b><p>Check in daily, submit reports and build your streak.</p></div>
-      <div class="l-step"><div class="num">4</div><b>Get verified</b><p>Companies get verified, certificates get scored, and you graduate with proof.</p></div>
-    </div>
-  </section>
-
-  <section class="l-section">
-    <div class="l-band">
-      <div>
-        <h2>Your dashboard knows what you need to do today.</h2>
-        <p>Streak, today's report, attendance, deadlines, application pipeline and this week's progress — all in one glance. Faculty see at-risk students; the T&amp;P cell sees the whole college.</p>
-        <button class="btn btn-primary" onclick="Auth.open('register')">Try the live demo</button>
-      </div>
-      <div class="preview">
-        <div class="pv"><b>🔥 14 day streak <span class="badge b-verified">+120 pts</span></b><small>Today's report submitted</small></div>
-        <div class="pv"><b>📅 Attendance <span class="badge b-active">92%</span></b><small>This month</small></div>
-        <div class="pv"><b>🎯 Interview in 3 days</b><small>TechFlow Systems · SDE Intern</small></div>
-        <div class="pv"><b>🏅 College rank #1</b><small>Computer Science · 1,240 pts</small></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="l-section" id="testimonials">
-    <div class="l-head">
-      <div class="kicker">Loved by campuses</div>
-      <h2>Real workflows, real results</h2>
-    </div>
-    <div class="l-grid">
-      <div class="l-quote">
-        <p>“We replaced five spreadsheets with InternTracker. Report collection used to take a week — now it's automatic and every report is stamped.”</p>
-        <div class="who"><div class="avatar">RM</div><div><b>Rohan Verma</b><small>T&amp;P Cell Coordinator, Springfield Institute of Technology</small></div></div>
-      </div>
-      <div class="l-quote">
-        <p>“The streak system actually changed behaviour. Students who used to submit nothing now compete on the leaderboard.”</p>
-        <div class="who"><div class="avatar">MS</div><div><b>Dr. Meera Sharma</b><small>Associate Professor, Computer Science</small></div></div>
-      </div>
-      <div class="l-quote">
-        <p>“We can verify a company's documents once and trust every application that follows. Hiring is faster and safer.”</p>
-        <div class="who"><div class="avatar">AG</div><div><b>Ananya Gupta</b><small>Engineering Manager, TechFlow Systems</small></div></div>
+  <!-- ============ TRACKING + VERIFICATION SPLIT ============ -->
+  <section class="section" id="verify">
+    <div class="container">
+      <div class="split">
+        <div>
+          <div class="sec-kicker">Daily progress tracking</div>
+          <h2 class="sec-title">Every intern's day, on the record</h2>
+          <p class="sec-sub">Daily reports, weekly summaries, attendance check-in/out, mentor contact — students log it, faculty reviews it, companies see it.</p>
+          <ul class="check-list">
+            <li><span style="color:#0d9488"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></span><span><b>Streak &amp; points engine</b> — +10 per approved daily report, +50 weekly, +5 per check-in.</span></li>
+            <li><span style="color:#0d9488"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></span><span><b>Faculty review queue</b> — approve or reject with feedback; students get notified instantly.</span></li>
+            <li><span style="color:#0d9488"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></span><span><b>At-risk detection</b> — low attendance, dead streaks, and report gaps surface automatically.</span></li>
+            <li><span style="color:#0d9488"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></span><span><b>Internship tracker</b> — on-campus, off-campus, college-provided, or self-found, with offer-letter upload.</span></li>
+          </ul>
+        </div>
+        <div class="mock-window">
+          <div class="mock-bar"><i style="background:#fb7185"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i><span style="margin-left:8px;font-size:12px;color:#8fa1c2">student dashboard · TechFlow Systems</span></div>
+          <div class="mock-body">
+            <div class="mock-row">
+              <span class="avatar sm" style="background:#0d9488">A</span>
+              <div class="d"><b>🔥 12-day streak</b><span>Daily report submitted · +10 pts</span></div>
+              <span class="mock-pill" style="background:rgba(52,211,153,.15);color:#34d399">Approved</span>
+            </div>
+            <div class="mock-row">
+              <span class="avatar sm" style="background:#2563eb">T</span>
+              <div class="d"><b>Backend Engineering Intern</b><span>Hybrid · Bangalore · ₹25,000/mo</span></div>
+              <span class="mock-pill" style="background:rgba(45,212,191,.15);color:#2dd4bf">Joined</span>
+            </div>
+            <div class="mock-row">
+              <span class="avatar sm" style="background:#f59e0b">C</span>
+              <div class="d"><b>Certificate verification</b><span>TechFlow Systems · authenticity 92%</span></div>
+              <span class="mock-pill" style="background:rgba(52,211,153,.15);color:#34d399">✓</span>
+            </div>
+            <div class="mock-row">
+              <span class="avatar sm" style="background:#7c3aed">R</span>
+              <div class="d"><b>College rank #1</b><span>1,240 pts · top of Computer Science</span></div>
+              <span class="mock-pill" style="background:rgba(251,191,36,.15);color:#fbbf24">#1</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="l-section" style="padding-top:20px">
-    <div class="l-stats">
-      <div class="l-stat"><b>10+</b><span>Live internships seeded</span></div>
-      <div class="l-stat"><b>4</b><span>Roles on one platform</span></div>
-      <div class="l-stat"><b>100%</b><span>Local — your Postgres, your machine</span></div>
-      <div class="l-stat"><b>0</b><span>Cloud APIs required</span></div>
+  <section class="section section-alt">
+    <div class="container">
+      <div class="split">
+        <div class="mock-window" style="order:1">
+          <div class="mock-bar"><i style="background:#fb7185"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i><span style="margin-left:8px;font-size:12px;color:#8fa1c2">T&amp;P cell · verification queue</span></div>
+          <div class="mock-body">
+            <div class="mock-row">
+              <span class="avatar sm" style="background:#b45309">N</span>
+              <div class="d"><b>NextGen Robotics</b><span>Robotics &amp; AI · Pune · re-submitted 2d ago</span></div>
+              <span class="mock-pill" style="background:rgba(251,191,36,.15);color:#fbbf24">Pending</span>
+            </div>
+            <div class="mock-row">
+              <span class="avatar sm" style="background:#0d9488">T</span>
+              <div class="d"><b>TechFlow Systems</b><span>Software · Bangalore · verified 3d ago</span></div>
+              <span class="mock-pill" style="background:rgba(52,211,153,.15);color:#34d399">✓ Verified</span>
+            </div>
+            <div class="mock-row">
+              <span class="avatar sm" style="background:#2563eb">C</span>
+              <div class="d"><b>Certificate #INT-102-88421</b><span>Backend Engineering Intern · authenticity 92%</span></div>
+              <span class="mock-pill" style="background:rgba(52,211,153,.15);color:#34d399">Approved</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="sec-kicker">Internship verification</div>
+          <h2 class="sec-title">No fake internships. No fake certificates.</h2>
+          <p class="sec-sub">The T&amp;P cell reviews every company and every certificate before anything becomes official. Companies re-submit until they're verified; certificates get an authenticity score.</p>
+          <ul class="check-list">
+            <li><span style="color:#0d9488"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></span><span><b>Verified company badge</b> — students can trust every listing they apply to.</span></li>
+            <li><span style="color:#0d9488"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></span><span><b>Authenticity scoring</b> — certificates are scored and stored under unique codes.</span></li>
+            <li><span style="color:#0d9488"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></span><span><b>Public verify lookup</b> — anyone can check a certificate code from the student page.</span></li>
+          </ul>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section class="l-section" style="text-align:center">
-    <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:800">Ready to run your campus on InternTracker?</h2>
-    <p style="color:var(--ink-2);margin:12px 0 24px">Free for your hackathon demo — seeded with realistic data so every dashboard is populated.</p>
-    <button class="btn btn-primary" style="padding:12px 26px;font-size:15px" onclick="Auth.open('register')">Create your account</button>
+  <!-- ============ STATS ============ -->
+  <section class="section" id="stats">
+    <div class="container">
+      <div style="text-align:center;margin-bottom:40px">
+        <div class="sec-kicker">Impact</div>
+        <h2 class="sec-title">Numbers that speak</h2>
+      </div>
+      <div class="stat-band">
+        <div class="sb"><div class="v">40,000+</div><div class="l">Applications processed</div></div>
+        <div class="sb"><div class="v">1,200+</div><div class="l">Daily reports approved</div></div>
+        <div class="sb"><div class="v">310</div><div class="l">Internships completed</div></div>
+        <div class="sb"><div class="v">98.2%</div><div class="l">Placement satisfaction</div></div>
+      </div>
+    </div>
   </section>
 
-  <footer class="l-footer">
-    <div class="cols">
-      <div><h5>Product</h5><a href="#features">Features</a><a href="#how">How it works</a><a href="#roles">Roles</a></div>
-      <div><h5>For</h5><a href="#roles">Students</a><a href="#roles">Faculty</a><a href="#roles">T&amp;P Cell</a><a href="#roles">Companies</a></div>
-      <div><h5>College</h5><a href="#">Springfield Institute of Technology</a><a href="#">Training &amp; Placement Cell</a></div>
-      <div><h5>Built with</h5><a href="#">FastAPI + PostgreSQL</a><a href="#">Vanilla JS · No frameworks</a></div>
+  <!-- ============ TESTIMONIALS ============ -->
+  <section class="section section-alt" id="testimonials">
+    <div class="container">
+      <div style="text-align:center">
+        <div class="sec-kicker">Stories</div>
+        <h2 class="sec-title">Loved by students, faculty &amp; companies</h2>
+      </div>
+      <div class="testimonial-grid">
+        <div class="testi">
+          <div class="stars">★★★★★</div>
+          <p>"My streak kept me consistent through the whole internship. The tracker made it feel like a game, and my rank on the leaderboard pushed me to submit better reports."</p>
+          <div class="who"><span class="avatar">A</span><div><b>Aarav Mehta</b><span>CSE · Backend Intern at TechFlow Systems</span></div></div>
+        </div>
+        <div class="testi">
+          <div class="stars">★★★★★</div>
+          <p>"For the first time I can see which students are actually struggling — before their streak dies and their grades follow. The at-risk flags changed how our department mentors."</p>
+          <div class="who"><span class="avatar" style="background:#2563eb">R</span><div><b>Prof. Ramesh Iyer</b><span>Faculty Mentor, Computer Science</span></div></div>
+        </div>
+        <div class="testi">
+          <div class="stars">★★★★★</div>
+          <p>"The applicant pipeline replaced our spreadsheet hell. We shortlist, interview, and select inside one screen, and we can monitor our interns' daily progress in real time."</p>
+          <div class="who"><span class="avatar" style="background:#b45309">T</span><div><b>Anita Krishnan</b><span>Engineering Manager, TechFlow Systems</span></div></div>
+        </div>
+      </div>
     </div>
-    <div>© 2026 InternTracker · Built for hackathons, ready for production.</div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-band">
+        <h2>Ready to run your internships on one platform?</h2>
+        <p>Join the colleges and companies already tracking, verifying, and growing with InternTracker.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" onclick="openAuth('register')">Create your account</button>
+          <button class="btn btn-lg" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);color:#fff" onclick="openAuth('login')">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="landing-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a class="logo" href="#top" style="text-decoration:none">
+            <span class="logo-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <span class="logo-text">Intern<span style="color:#14b8a6">Tracker</span></span>
+          </a>
+          <p style="margin-top:14px;font-size:13.5px;max-width:280px">The complete internship management platform for colleges — students, faculty, T&amp;P cell, and companies, together.</p>
+        </div>
+        <div>
+          <h5>Product</h5>
+          <ul>
+            <li><a href="#how">How it works</a></li>
+            <li><a href="#benefits">Benefits</a></li>
+            <li><a href="#verify">Verification</a></li>
+            <li><a href="#stats">Impact</a></li>
+          </ul>
+        </div>
+        <div>
+          <h5>Roles</h5>
+          <ul>
+            <li><a href="#" onclick="openAuth('register','student');return false">For Students</a></li>
+            <li><a href="#" onclick="openAuth('register','faculty');return false">For Faculty</a></li>
+            <li><a href="#" onclick="openAuth('register','admin');return false">For T&amp;P Cell</a></li>
+            <li><a href="#" onclick="openAuth('register','company');return false">For Companies</a></li>
+          </ul>
+        </div>
+        <div>
+          <h5>Contact</h5>
+          <ul>
+            <li style="display:flex;gap:8px;align-items:center"><span id="mailIcon"></span>hello@interntracker.app</li>
+            <li style="display:flex;gap:8px;align-items:center"><span id="phoneIcon"></span>+91 98765 43210</li>
+            <li>Greenfield Institute of Technology<br />Bengaluru, India</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 InternTracker · Built for hackathon demo</span>
+        <span>Made with ♥ for colleges</span>
+      </div>
+    </div>
   </footer>
-</div>
 
-<!-- ================= Auth modal ================= -->
-<div class="modal-backdrop" id="auth-modal" style="display:none">
-  <div class="modal auth-card">
-    <button class="close" onclick="Auth.close()">&times;</button>
-    <h2 id="auth-title">Sign in to InternTracker</h2>
-    <p class="muted mb">One platform for internships — college, students, faculty and companies.</p>
-
-    <div class="tabs">
-      <button id="tab-login" class="active" onclick="Auth.tab('login')">Sign in</button>
-      <button id="tab-register" onclick="Auth.tab('register')">Create account</button>
-    </div>
-
-    <form id="login-form" onsubmit="return Auth.login(event)">
-      <div class="field"><label>Email</label>
-        <input class="input" name="email" type="email" required placeholder="you@college.edu"></div>
-      <div class="field"><label>Password</label>
-        <input class="input" name="password" type="password" required placeholder="••••••••"></div>
-      <button class="btn btn-primary btn-block" type="submit">Sign in</button>
-    </form>
-
-    <form id="register-form" style="display:none" onsubmit="return Auth.register(event)">
-      <div class="field">
-        <label>I am a…</label>
-        <div class="role-pick" id="role-pick">
-          <button type="button" class="role-opt" data-role="student" onclick="Auth.pickRole('student')">
-            <span class="ico tone-accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg></span>
-            <span><b>Student</b><small>Log reports, build streaks</small></span>
-          </button>
-          <button type="button" class="role-opt" data-role="faculty" onclick="Auth.pickRole('faculty')">
-            <span class="ico tone-sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5 6.5-5s6.5 1.5 6.5 5M16 5a3.5 3.5 0 0 1 0 6.8M17.5 15.2c2.3.6 4 1.9 4 4.8"/></svg></span>
-            <span><b>Faculty</b><small>Mentor &amp; review</small></span>
-          </button>
-          <button type="button" class="role-opt" data-role="admin" onclick="Auth.pickRole('admin')">
-            <span class="ico tone-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M3 3v18h18"/><path d="M7 15v-4M12 15V7M17 15v-6"/></svg></span>
-            <span><b>T&amp;P Cell</b><small>Verify &amp; monitor</small></span>
-          </button>
-          <button type="button" class="role-opt" data-role="company" onclick="Auth.pickRole('company')">
-            <span class="ico tone-emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M9 21v-4h6v4"/></svg></span>
-            <span><b>Company</b><small>Hire &amp; monitor</small></span>
-          </button>
-        </div>
+  <!-- ============ AUTH MODAL ============ -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="authTitle">Sign in to InternTracker</h3>
+        <button class="x-btn" onclick="closeAuth()">✕</button>
       </div>
-
-      <div class="row-2">
-        <div class="field"><label>Full name</label><input class="input" name="name" required placeholder="Your name"></div>
-        <div class="field"><label>Email</label><input class="input" name="email" type="email" required placeholder="you@college.edu"></div>
-      </div>
-      <div class="field"><label>Password</label><input class="input" name="password" type="password" minlength="6" required placeholder="At least 6 characters"></div>
-
-      <div id="role-fields">
-        <div class="f-student" style="display:none">
-          <div class="row-3">
-            <div class="field"><label>Department</label><input class="input" name="department" placeholder="Computer Science"></div>
-            <div class="field"><label>Branch</label><input class="input" name="branch" placeholder="CSE"></div>
-            <div class="field"><label>CGPA</label><input class="input" name="cgpa" type="number" step="0.01" min="0" max="10" placeholder="8.5"></div>
-          </div>
-          <div class="row-3">
-            <div class="field"><label>Year</label>
-              <select class="select" name="year"><option value="1">1st</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th</option></select></div>
-            <div class="field"><label>Semester</label>
-              <select class="select" name="semester"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></div>
-            <div class="field"><label>Skills</label><input class="input" name="skills" placeholder="Python, React, SQL"></div>
+      <div class="modal-body">
+        <!-- role picker -->
+        <div class="field">
+          <label>Select your role</label>
+          <div class="role-grid" id="roleGrid">
+            <div class="role-opt active" data-role="student" onclick="pickRole('student')"><span class="ri">🎓</span><span class="rl">Student</span></div>
+            <div class="role-opt" data-role="faculty" onclick="pickRole('faculty')"><span class="ri">👨‍🏫</span><span class="rl">Teacher / Faculty</span></div>
+            <div class="role-opt" data-role="admin" onclick="pickRole('admin')"><span class="ri">🏛️</span><span class="rl">T&amp;P Cell</span></div>
+            <div class="role-opt" data-role="company" onclick="pickRole('company')"><span class="ri">🏢</span><span class="rl">Company</span></div>
           </div>
         </div>
-        <div class="f-faculty" style="display:none">
-          <div class="row-2">
-            <div class="field"><label>Department</label><input class="input" name="department" placeholder="Computer Science"></div>
-            <div class="field"><label>Designation</label><input class="input" name="designation" value="Assistant Professor"></div>
-          </div>
-        </div>
-        <div class="f-company" style="display:none">
-          <div class="field"><label>Company name</label><input class="input" name="company_name" placeholder="TechFlow Systems"></div>
-          <div class="row-3">
-            <div class="field"><label>Industry</label><input class="input" name="industry" placeholder="Software"></div>
-            <div class="field"><label>Website</label><input class="input" name="website" placeholder="https://…"></div>
-            <div class="field"><label>HQ location</label><input class="input" name="location" placeholder="Bengaluru"></div>
-          </div>
-          <div class="field"><label>About the company</label><textarea class="textarea" name="description" placeholder="What does your company do?"></textarea></div>
-        </div>
-      </div>
 
-      <button class="btn btn-primary btn-block" type="submit" id="register-btn" disabled>Create account</button>
-    </form>
+        <!-- tabs -->
+        <div class="tabs">
+          <button class="tab active" data-tab="login" onclick="switchAuthTab('login')">Login</button>
+          <button class="tab" data-tab="register" onclick="switchAuthTab('register')">Register</button>
+          <button class="tab" data-tab="forgot" onclick="switchAuthTab('forgot')">Forgot password</button>
+        </div>
 
-    <div class="demo-logins" id="demo-logins">
-      <b>Demo logins</b> — click to sign in instantly:
-      <div class="flex mt" style="gap:8px">
-        <button class="btn btn-sm btn-ghost" onclick="Auth.demo('student@college.edu','student123')">Student</button>
-        <button class="btn btn-sm btn-ghost" onclick="Auth.demo('faculty@college.edu','faculty123')">Faculty</button>
-        <button class="btn btn-sm btn-ghost" onclick="Auth.demo('admin@college.edu','admin123')">T&amp;P Cell</button>
-        <button class="btn btn-sm btn-ghost" onclick="Auth.demo('techflowsystems@demo.com','company123')">Company</button>
+        <!-- LOGIN -->
+        <form id="loginForm" onsubmit="return doLogin(event)">
+          <div class="field"><label>Email</label><input class="input" type="email" name="email" placeholder="you@college.edu" required /></div>
+          <div class="field"><label>Password</label><input class="input" type="password" name="password" placeholder="••••••••" required /></div>
+          <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in</button>
+        </form>
+
+        <!-- REGISTER -->
+        <form id="registerForm" class="hide" onsubmit="return doRegister(event)">
+          <div class="field"><label>Full name</label><input class="input" name="name" placeholder="e.g. Aarav Mehta" required minlength="2" /></div>
+          <div class="field"><label>Email</label><input class="input" type="email" name="email" placeholder="you@college.edu" required /></div>
+          <div class="field"><label>Password</label><input class="input" type="password" name="password" placeholder="At least 6 characters" required minlength="6" /></div>
+          <!-- student extras -->
+          <div id="studentExtras" class="hide">
+            <div class="grid grid-2">
+              <div class="field"><label>Department</label><input class="input" name="department" placeholder="Computer Science" /></div>
+              <div class="field"><label>Branch</label><input class="input" name="branch" placeholder="CSE / ECE / ME…" /></div>
+            </div>
+            <div class="grid grid-2">
+              <div class="field"><label>Year</label><select class="input" name="year"><option value="">Select year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></div>
+              <div class="field"><label>CGPA</label><input class="input" name="cgpa" type="number" step="0.01" min="0" max="10" placeholder="8.5" /></div>
+            </div>
+            <div class="grid grid-2">
+              <div class="field"><label>Phone</label><input class="input" name="phone" placeholder="+91 …" /></div>
+              <div class="field"><label>City</label><input class="input" name="location" placeholder="Bangalore" /></div>
+            </div>
+          </div>
+          <!-- company extras -->
+          <div id="companyExtras" class="hide">
+            <div class="field"><label>Company name</label><input class="input" name="company_name" placeholder="TechFlow Systems" /></div>
+            <div class="grid grid-2">
+              <div class="field"><label>Website</label><input class="input" name="company_website" placeholder="https://…" /></div>
+              <div class="field"><label>Industry</label><input class="input" name="company_industry" placeholder="Software" /></div>
+            </div>
+            <div class="field"><label>About the company</label><textarea class="input" name="company_description" placeholder="What does your company do?"></textarea></div>
+            <p class="hint" style="font-size:12px;color:var(--amber);font-weight:600">Your company will be verified by the T&amp;P cell before internships go live.</p>
+          </div>
+          <button class="btn btn-primary btn-block btn-lg" type="submit">Create account</button>
+        </form>
+
+        <!-- FORGOT -->
+        <form id="forgotForm" class="hide" onsubmit="return doForgot(event)">
+          <div class="field"><label>Email</label><input class="input" type="email" name="email" placeholder="you@college.edu" required /></div>
+          <div class="field"><label>New password</label><input class="input" type="password" name="new_password" placeholder="At least 6 characters" required minlength="6" /></div>
+          <p class="hint" style="margin-bottom:14px">For this local demo, reset happens instantly via email. In production this would send a secure reset link.</p>
+          <button class="btn btn-primary btn-block btn-lg" type="submit">Reset password</button>
+        </form>
+
+        <!-- demo accounts -->
+        <div class="demo-accounts">
+          <div class="da-title">Demo accounts (one-click)</div>
+          <div id="demoList"></div>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<script src="/static/js/api.js"></script>
-<script src="/static/js/ui.js"></script>
-<script src="/static/js/landing.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/landing.js"></script>
 </body>
 </html>

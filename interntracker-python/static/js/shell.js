@@ -1,171 +1,143 @@
-/* Role workspace shell: sidebar + topbar + hash router + notifications */
-const NAV = {
-  student: [
-    { key: "dashboard", label: "Dashboard", icon: "dashboard" },
-    { key: "internships", label: "Explorer", icon: "compass" },
-    { key: "applications", label: "Applications", icon: "briefcase" },
-    { key: "tracker", label: "Tracker", icon: "flame" },
-    { key: "attendance", label: "Attendance", icon: "calendar" },
-    { key: "reports", label: "Daily Reports", icon: "file" },
-    { key: "deadlines", label: "Deadlines", icon: "clock" },
-    { key: "leaderboard", label: "Leaderboard", icon: "trophy" },
-    { key: "rewards", label: "Rewards", icon: "award" },
-    { key: "certificates", label: "Certificates", icon: "shield" },
-    { key: "profile", label: "Profile", icon: "user" },
-  ],
-  faculty: [
-    { key: "dashboard", label: "Dashboard", icon: "dashboard" },
-    { key: "students", label: "My Students", icon: "users" },
-    { key: "reports", label: "Reports Review", icon: "file" },
-    { key: "performance", label: "Performance", icon: "chart" },
-  ],
-  admin: [
-    { key: "dashboard", label: "Dashboard", icon: "dashboard" },
-    { key: "students", label: "Students", icon: "users" },
-    { key: "faculty", label: "Faculty", icon: "user" },
-    { key: "companies", label: "Companies", icon: "building" },
-    { key: "verification", label: "Verification Queue", icon: "shield" },
-    { key: "internships", label: "Internships", icon: "briefcase" },
-    { key: "applications", label: "Applications", icon: "doc" },
-    { key: "certificates", label: "Certificates", icon: "qr" },
-    { key: "rankings", label: "Rankings", icon: "trophy" },
-    { key: "rewards", label: "Rewards Config", icon: "award" },
-    { key: "analytics", label: "Analytics", icon: "chart" },
-    { key: "announcements", label: "Announce", icon: "megaphone" },
-  ],
-  company: [
-    { key: "dashboard", label: "Dashboard", icon: "dashboard" },
-    { key: "profile", label: "Company Profile", icon: "building" },
-    { key: "internships", label: "Internships", icon: "briefcase" },
-    { key: "applications", label: "Applications", icon: "inbox" },
-    { key: "interns", label: "Current Interns", icon: "users" },
-  ],
+/* InternTracker workspace shell — shared across all four roles */
+window.App = { pages: {}, state: {} };
+
+const ROLE_LABEL = { student: "Student", faculty: "Faculty", admin: "T&P Cell Admin", company: "Company" };
+const PAGE_ICON = {
+  dashboard: "dashboard", explorer: "explorer", applications: "applications", tracker: "tracker",
+  report: "report", reports: "report", attendance: "attendance", deadlines: "deadlines",
+  leaderboard: "leaderboard", rewards: "rewards", certificates: "certificates", profile: "profile",
+  students: "students", faculty: "students", review: "review", performance: "performance",
+  verification: "shield", internships: "explorer", rankings: "leaderboard", analytics: "analytics",
+  announcements: "megaphone", activity: "log", interns: "students",
 };
 
-const VIEW_TITLES = {
-  student: { dashboard: "Dashboard Overview", internships: "Internship Explorer", applications: "My Applications",
-             tracker: "Internship Tracker", attendance: "Attendance", reports: "Daily & Weekly Reports",
-             deadlines: "Deadlines", leaderboard: "College Leaderboard", rewards: "Rewards & Badges",
-             certificates: "Certificate Verification", profile: "My Profile" },
-  faculty: { dashboard: "Faculty Dashboard", students: "My Students", reports: "Reports Review", performance: "Performance" },
-  admin: { dashboard: "T&P Cell Dashboard", students: "All Students", faculty: "Faculty", companies: "Companies",
-           verification: "Company Verification Queue", internships: "Internships", applications: "Applications",
-           certificates: "Certificate Review", rankings: "College Rankings", rewards: "Rewards Configuration",
-           analytics: "Analytics", announcements: "Announcements" },
-  company: { dashboard: "Company Dashboard", profile: "Company Profile", internships: "Internships",
-             applications: "Applications", interns: "Current Interns" },
-};
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("open");
+}
 
-async function bootShell(role, views, opts = {}) {
-  const user = await loadMe();
-  if (user.role !== role) { location.href = roleHome(user.role); return; }
+function toggleDropdown(id) {
+  document.querySelectorAll(".dropdown").forEach((d) => {
+    if (d.id !== id) d.classList.remove("open");
+  });
+  document.getElementById(id).classList.toggle("open");
+}
 
-  const app = document.getElementById("app");
-  app.innerHTML = "";
-
-  const nav = NAV[role];
-  const titles = VIEW_TITLES[role];
-
-  // ---- sidebar ----
-  const navEl = h("nav", { class: "nav" },
-    nav.map(item => h("a", { href: "#/" + item.key, "data-view": item.key },
-      icon(item.icon), item.label)),
-  );
-  const sidebar = h("aside", { class: "sidebar", id: "sidebar" },
-    h("div", { class: "brand" },
-      h("div", { class: "logo" }, "IT"),
-      h("div", {}, h("b", "InternTracker"), h("small", "T&P Cell Portal")),
-    ),
-    navEl,
-    h("div", { class: "me" },
-      h("div", { class: "avatar" }, initials(user.name)),
-      h("div", { class: "who" }, h("b", user.name), h("span", roleLabel(role))),
-      h("button", { class: "icon-btn", title: "Logout", onclick: logout, style: "background:none;border:none;color:#94a3b8" }, icon("logout")),
-    ),
-  );
-
-  // ---- topbar ----
-  const titleEl = h("div", {},
-    h("h1", { id: "page-title" }, ""),
-    h("div", { class: "sub", id: "page-sub" }, ""),
-  );
-  const bellWrap = h("div", { style: "position:relative" },
-    h("button", { class: "icon-btn", id: "bell", onclick: toggleNotifs }, icon("bell"), h("span", { class: "dot", id: "bell-dot", style: "display:none" })),
-    h("div", { class: "dropdown", id: "notif-drop", style: "display:none" }),
-  );
-  const topbar = h("header", { class: "topbar" }, titleEl, h("div", { class: "actions" }, bellWrap));
-
-  const mobileTop = h("div", { class: "mobile-top" },
-    h("button", { class: "burger", onclick: () => sidebar.classList.toggle("open") }, icon("chevron")),
-    h("b", "InternTracker"),
-  );
-
-  const content = h("main", { class: "content", id: "content" });
-  const main = h("div", { class: "main" }, mobileTop, topbar, content);
-  app.append(sidebar, main);
-
-  // close sidebar on nav (mobile)
-  navEl.addEventListener("click", (e) => { if (e.target.closest("a")) sidebar.classList.remove("open"); });
-
-  // ---- routing ----
-  function currentView() {
-    const v = (location.hash || "#/dashboard").replace(/^#\/?/, "").split("?")[0];
-    return views[v] ? v : Object.keys(views)[0];
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".dropdown")) {
+    document.querySelectorAll(".dropdown").forEach((d) => d.classList.remove("open"));
   }
-  function render() {
-    const v = currentView();
-    navEl.querySelectorAll("a").forEach(a => a.classList.toggle("active", a.dataset.view === v));
-    titleEl.querySelector("h1").textContent = titles[v] || "Dashboard";
-    content.innerHTML = "";
-    content.append(spinner());
-    try {
-      views[v](content);
-    } catch (err) {
-      content.innerHTML = "";
-      content.append(emptyState("Something went wrong: " + err.message, "⚠️"));
-    }
-  }
-  window.addEventListener("hashchange", render);
-  render();
-  refreshNotifBadge();
-  setInterval(refreshNotifBadge, 45000);
+});
 
-  // ---- notifications ----
-  async function refreshNotifBadge() {
-    try {
-      const d = await API.get("/notifications");
-      const dot = document.getElementById("bell-dot");
-      dot.style.display = d.unread > 0 ? "" : "none";
-    } catch (e) { /* ignore */ }
-  }
-  async function toggleNotifs() {
-    const drop = document.getElementById("notif-drop");
-    const show = drop.style.display === "none";
-    drop.style.display = show ? "" : "none";
-    if (!show) return;
-    try {
-      const d = await API.get("/notifications");
-      drop.innerHTML = "";
-      drop.append(h("div", { class: "head" }, "Notifications",
-        h("button", { class: "btn btn-sm btn-ghost", onclick: async () => {
-          await API.post("/notifications/read-all"); toggleNotifs(); refreshNotifBadge();
-        } }, "Mark all read")));
-      if (!d.items.length) drop.append(emptyState("No notifications yet", "🔔"));
-      d.items.forEach(n => drop.append(h("div", { class: "n" + (n.read ? "" : " unread"), onclick: async () => {
-        if (!n.read) await API.post("/notifications/" + n.id + "/read");
-        drop.innerHTML = ""; toggleNotifs(); refreshNotifBadge();
-      } },
-        h("div", {}, h("b", n.title), h("p", n.body), h("time", fmtDateTime(n.created_at))),
-      )));
-    } catch (e) { /* ignore */ }
-  }
+async function shellInit(role) {
+  // fill nav icons
+  document.querySelectorAll(".nav-item").forEach((b) => {
+    const key = PAGE_ICON[b.dataset.page] || "dashboard";
+    const span = document.getElementById("ic-" + b.dataset.page);
+    if (span) span.innerHTML = UI.icons[key] || "";
+  });
 
-  async function logout() {
-    API.clear();
+  let me;
+  try {
+    me = await API.get("/api/auth/me");
+  } catch (e) {
     location.href = "/";
+    return;
+  }
+  if (me.role !== role) {
+    const map = { student: "/student", faculty: "/faculty", admin: "/admin", company: "/company" };
+    location.href = map[me.role] || "/";
+    return;
+  }
+  App.me = me;
+
+  // sidebar user
+  document.getElementById("sideUser").innerHTML = `
+    ${UI.avatar(me.name)}
+    <div style="min-width:0">
+      <div class="u-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px">${UI.esc(me.name)}</div>
+      <div class="u-role">${ROLE_LABEL[me.role]}</div>
+    </div>`;
+
+  // topbar right
+  renderNotifBell();
+  renderUserMenu();
+
+  // nav wiring
+  document.querySelectorAll(".nav-item").forEach((b) => {
+    b.addEventListener("click", () => switchPage(b.dataset.page));
+  });
+
+  // initial page
+  const initial = location.hash.replace("#", "") || document.querySelector(".nav-item")?.dataset.page || "dashboard";
+  switchPage(initial);
+}
+
+function switchPage(page) {
+  if (!App.pages[page]) {
+    if (App.pages.dashboard) page = "dashboard";
+    else return;
+  }
+  document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  const nav = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (nav) {
+    document.getElementById("pageTitle").innerHTML = nav.dataset.title || page;
+    document.getElementById("pageSub").textContent = nav.dataset.sub || "";
+  }
+  location.hash = page;
+  const content = document.getElementById("content");
+  content.innerHTML = '<div class="loading-page"><div class="spinner"></div></div>';
+  App.pages[page](content);
+  document.getElementById("sidebar")?.classList.remove("open");
+  window.scrollTo({ top: 0 });
+}
+
+/* ---------------- notifications ---------------- */
+async function renderNotifBell() {
+  const wrap = document.getElementById("notifWrap");
+  let items = [];
+  try { items = await API.get("/api/notifications"); } catch (e) { /* ignore */ }
+  const unread = items.filter((n) => !n.read).length;
+  wrap.innerHTML = `
+    <button class="bell" onclick="toggleDropdown('notifWrap')">
+      ${UI.icons.bell}
+      ${unread ? `<span class="dot">${unread}</span>` : ""}
+    </button>
+    <div class="dropdown-menu notif-list" style="width:330px"></div>`;
+  const menu = wrap.querySelector(".dropdown-menu");
+  if (!items.length) {
+    menu.innerHTML = `<div class="empty" style="padding:26px 14px">No notifications yet</div>`;
+  } else {
+    menu.innerHTML = items.map((n) => `
+      <div class="notif-item ${n.read ? "" : "unread"}">
+        <span>${n.type === "success" ? "✅" : n.type === "warning" ? "⚠️" : n.type === "system" ? "📢" : "🔔"}</span>
+        <div style="min-width:0">
+          <div class="n-title">${UI.esc(n.title)}</div>
+          <div class="n-msg">${UI.esc(n.message)}</div>
+          <div class="n-time">${UI.timeAgo(n.created_at)}</div>
+        </div>
+      </div>`).join("");
+  }
+  if (unread) {
+    menu.addEventListener("click", () => API.post("/api/notifications/read").then(() => renderNotifBell()), { once: true });
   }
 }
 
-function roleLabel(role) {
-  return { student: "Student", faculty: "Faculty", admin: "T&P Cell / Admin", company: "Company" }[role] || role;
+/* ---------------- user menu ---------------- */
+function renderUserMenu() {
+  const wrap = document.getElementById("userWrap");
+  wrap.innerHTML = `
+    <div style="cursor:pointer" onclick="toggleDropdown('userWrap')">${UI.avatar(App.me.name)}</div>
+    <div class="dropdown-menu">
+      <div style="padding:10px 12px;border-bottom:1px solid var(--line);margin-bottom:6px">
+        <div class="bold" style="font-size:13.5px">${UI.esc(App.me.name)}</div>
+        <div class="muted small">${UI.esc(App.me.email)}</div>
+      </div>
+      <a class="dropdown-item" href="/" style="text-decoration:none">${UI.icons.home} Back to landing</a>
+      <button class="dropdown-item danger" onclick="logout()">${UI.icons.logout} Log out</button>
+    </div>`;
+}
+
+function logout() {
+  API.clear();
+  location.href = "/";
 }
